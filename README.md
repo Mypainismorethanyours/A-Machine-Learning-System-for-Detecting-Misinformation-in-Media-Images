@@ -71,20 +71,84 @@ diagram, (3) justification for your strategy, (4) relate back to lecture materia
 
 <!-- Make sure to clarify how you will satisfy the Unit 4 and Unit 5 requirements, 
 and which optional "difficulty" points you are attempting. -->
+Strategy:
+
+Use a pretrained multimodal model (such as CLIP or a similar model) to detect whether an image is AI-generated or authentic. The model will be fine-tuned on a dataset consisting of both real and AI-generated images, labeled from the data sources mentioned.
+Training Platform: Use a cloud-based GPU instance for training and fine-tuning, utilizing Chameleon infrastructure for scalability.
+Relevant Diagram Parts:
+
+Data collection from social media feeds (APIs).
+Image preprocessing pipeline to normalize and resize images.
+Training and inference using a deep neural network for image classification (e.g., convolutional neural networks or multimodal models like CLIP).
+Justification:
+
+Fine-tuning pretrained models ensures the system benefits from state-of-the-art AI capabilities while focusing on the specific task of detecting AI-generated images.
+The use of cloud-based GPU instances ensures scalability and performance for model training.
+Related to Course Material:
+
+Use of pretrained models (like CLIP) and transfer learning aligns with Unit 4 (Model Training at Scale) and Unit 5 (Model Training Infrastructure and Platform).
+Handling multimodal data (image and text) fits into model training using different modalities.
 
 #### Model serving and monitoring platforms
 
 <!-- Make sure to clarify how you will satisfy the Unit 6 and Unit 7 requirements, 
 and which optional "difficulty" points you are attempting. -->
+Strategy:
+
+Once the model is trained, wrap the trained model into an API endpoint using Flask or FastAPI. The API will receive an image, process it through the model, and return whether the image is AI-generated or not.
+Use a cloud infrastructure with auto-scaling features to manage varying traffic and ensure low latency during real-time API requests.
+Relevant Diagram Parts:
+
+The REST API endpoint that serves model predictions.
+Integration with the web UI where social media moderators will interact with the system.
+Justification:
+
+Using containers (Docker) and microservices architecture allows independent scaling of the model serving API and UI components.
+The cloud infrastructure can scale according to demand and handle spikes in requests (such as when moderators are processing large batches of images).
+Related to Course Material:
+
+Using containers and scaling services aligns with Unit 6 (Model Serving) and Unit 3 (DevOps).
+The feedback loop for model evaluation and continuous improvement satisfies the monitoring aspect of the system (Unit 7).
 
 #### Data pipeline
 
 <!-- Make sure to clarify how you will satisfy the Unit 8 requirements,  and which 
 optional "difficulty" points you are attempting. -->
+Strategy:
+
+Collect images from social media using APIs like Twitter API, Instagram Graph API, or through web scraping.
+Use an ETL (Extract, Transform, Load) pipeline to preprocess the images for model training.
+Store preprocessed images and model weights in persistent cloud storage.
+Continuously gather new images for model re-training to ensure the system stays up-to-date with new AI generation techniques.
+Relevant Diagram Parts:
+
+Data collection API endpoints.
+Data storage and management systems.
+ETL pipeline for preprocessing images.
+Justification:
+
+Continuous collection and preprocessing of data ensures that the model is regularly updated with fresh, relevant examples of social media content.
+Related to Course Material:
+
+Data pipeline management meets Unit 8 (Data Pipeline) requirements, particularly around persistent storage and managing real-time data for inference.
 
 #### Continuous X
 
 <!-- Make sure to clarify how you will satisfy the Unit 3 requirements,  and which 
 optional "difficulty" points you are attempting. -->
+Strategy:
+
+Implement a CI/CD pipeline that automatically retrains the model with new data, evaluates it, and deploys the updated version to production.
+Monitor performance in real-time and use this feedback to initiate model re-training if performance drops.
+Relevant Diagram Parts:
+
+CI/CD pipeline for training, evaluation, and deployment.
+Model registry and version control for tracking model iterations.
+Justification:
+
+Automating the retraining process ensures that the model adapts to new types of AI-generated images over time, maintaining high accuracy in real-world applications.
+Related to Course Material:
+
+Automated pipelines align with Unit 3 (DevOps) for CI/CD, ensuring that the model is continuously updated with minimal manual intervention.
 
 
