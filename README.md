@@ -23,7 +23,7 @@ link to their contributions in all repos here. -->
 |---------------------------------|------------------------------------------|------------------------------------|
 | All team members                | Continuous X pipeline                    |                                    |
 | Chengqian Luo                   | Data collection and Data pipeline        |                                    |
-| Shengyang LI                    | Model training                           |                                    |
+| Shengyang Li                    | Model training                           |                                    |
 | Julio Rodriguez                 | Model serving and Monitoring	           |                                    |  
 
 
