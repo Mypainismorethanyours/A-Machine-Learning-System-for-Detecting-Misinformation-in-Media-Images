@@ -34,6 +34,8 @@ link to their contributions in all repos here. -->
 <!-- Overall digram of system. Doesn't need polish, does need to show all the pieces. 
 Must include: all the hardware, all the containers/software platforms, all the models, 
 all the data. -->
+![](https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/blob/main/System%20Diagram.png)
+
 
 ### Summary of outside materials
 
