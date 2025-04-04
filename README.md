@@ -23,9 +23,9 @@ link to their contributions in all repos here. -->
 | Name                            | Responsible for                          | Link to their commits in this repo |
 |---------------------------------|------------------------------------------|------------------------------------|
 | All team members                | Continuous X pipeline                    |                                    |
-| Chengqian Luo                   | Data collection and Data pipeline        |                                    |
-| Shengyang Li                    | Model training and Inference                           |                                    |
-| Julio Rodriguez                 | Model serving and Monitoring	           |                                    |  
+| Chengqian Luo                   | Data collection and Data pipeline        |  https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=Ayachisan                                  |
+| Shengyang Li                    | Model training and Inference                           | https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=Mypainismorethanyours                                   |
+| Julio Rodriguez                 | Model serving and Monitoring	           | https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=Ayachisan                                   |  
 
 
 
