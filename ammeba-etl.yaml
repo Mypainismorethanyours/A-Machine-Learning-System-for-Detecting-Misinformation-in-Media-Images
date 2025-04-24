@@ -57,7 +57,7 @@ services:
         import pandas as pd
 
         split_names = ["train", "val", "test"]
-        base_dir = "/data/AMMeBa-Raw/final_dataset"
+        base_dir = "/data/AMMeBa-Raw"
         output_base = "/data/AMMeBa-ContentManip"
 
         for split in split_names:
