@@ -9,7 +9,8 @@ services:
     image: python:3.11
     user: root
     volumes:
-      - ammeba:/data
+      - ./data:/data
+
     working_dir: /data
     command:
       - bash
@@ -23,7 +24,7 @@ services:
         cd AMMeBa-Raw
 
         echo "Downloading final_dataset.zip..."
-        curl -L https://nyu.box.com/shared/static/liey7cih8kgori1hon6ussg4dx76wvjd \
+        curl -L https://nyu.box.com/shared/static/liey7cih8kgori1hon6ussg4dx76wvjd.zip \
           -o final_dataset.zip
 
         echo "Unzipping..."
@@ -37,7 +38,8 @@ services:
     container_name: etl_transform_ammeba
     image: python:3.11
     volumes:
-      - ammeba:/data
+      - ./data:/data
+
     working_dir: /data/AMMeBa-Raw/final_dataset
     command:
       - bash
@@ -80,7 +82,8 @@ services:
     container_name: etl_load_ammeba
     image: rclone/rclone:latest
     volumes:
-      - ammeba:/data
+      - ./data:/data
+
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     entrypoint: /bin/sh
     command:
