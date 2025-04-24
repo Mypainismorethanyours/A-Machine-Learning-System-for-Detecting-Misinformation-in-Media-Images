@@ -57,7 +57,7 @@ services:
         import pandas as pd
 
         split_names = ["train", "val", "test"]
-        base_dir = "/data/AMMeBa-Raw"
+        base_dir = "/data/AMMeBa-Raw/final_dataset"
         output_base = "/data/AMMeBa-ContentManip"
 
         for split in split_names:
@@ -66,7 +66,8 @@ services:
 
             for _, row in df.iterrows():
                 filename = row["filename"]
-                label = "class_1" if row["content_manipulation"] else "class_0"
+                content_manip = str(row["content_manipulation"]).upper() == "TRUE"
+                label = "class_1" if content_manip else "class_0"
 
                 src = os.path.join(base_dir, split, "images", filename)
                 dst_dir = os.path.join(output_base, split, label)
@@ -74,7 +75,7 @@ services:
 
                 shutil.copy(src, os.path.join(dst_dir, filename))
         '
-
+        
         echo "Listing transformed dataset:"
         find /data/AMMeBa-ContentManip -type d
 
