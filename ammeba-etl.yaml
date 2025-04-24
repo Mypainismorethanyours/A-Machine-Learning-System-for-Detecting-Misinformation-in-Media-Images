@@ -23,7 +23,8 @@ services:
         cd AMMeBa-Raw
 
         echo "Downloading final_dataset.zip..."
-        curl -L https://nyu.box.com/shared/static/liey7cih8kgori1hon6ussg4dx76wvjd.zip -o final_dataset.zip
+        curl -L https://nyu.box.com/shared/static/liey7cih8kgori1hon6ussg4dx76wvjd.zip \
+          -o final_dataset.zip
 
         echo "Unzipping..."
         unzip -q final_dataset.zip
