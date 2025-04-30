@@ -31,7 +31,7 @@ services:
         rm final_dataset.zip
 
         echo "Dataset content:"
-        find /data/final_dataset -type f | head -n 10
+        find /data/final_dataset/images -mindepth 1 -maxdepth 2 -type f | head -n 10
 
   load-data:
     container_name: etl_load_ammeba
