@@ -10,7 +10,6 @@ services:
     user: root
     volumes:
       - ./data:/data
-
     working_dir: /data
     command:
       - bash
@@ -39,7 +38,6 @@ services:
     image: python:3.11
     volumes:
       - ./data:/data
-
     working_dir: /data/AMMeBa-Raw
     command:
       - bash
@@ -57,11 +55,11 @@ services:
         import pandas as pd
 
         split_names = ["train", "val", "test"]
-        base_dir = "/data/AMMeBa-Raw"
+        base_dir = "/data/AMMeBa-Raw/final_dataset"
         output_base = "/data/AMMeBa-ContentManip"
 
         for split in split_names:
-            csv_path = os.path.join(base_dir, split, "labels.csv")
+            csv_path = os.path.join(base_dir, f"{split}.csv")
             df = pd.read_csv(csv_path)
 
             for _, row in df.iterrows():
@@ -69,11 +67,12 @@ services:
                 content_manip = str(row["content_manipulation"]).upper() == "TRUE"
                 label = "class_1" if content_manip else "class_0"
 
-                src = os.path.join(base_dir, split, "images", filename)
+                src = os.path.join(base_dir, "images", filename)
                 dst_dir = os.path.join(output_base, split, label)
                 os.makedirs(dst_dir, exist_ok=True)
 
-                shutil.copy(src, os.path.join(dst_dir, filename))
+                if os.path.exists(src):
+                    shutil.copy(src, os.path.join(dst_dir, filename))
         '
 
         echo "Listing transformed dataset:"
@@ -84,26 +83,21 @@ services:
     image: rclone/rclone:latest
     volumes:
       - ./data:/data
-
       - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
     entrypoint: /bin/sh
     command:
       - -c
       - |
-        if [ -z "$RCLONE_CONTAINER" ]; then
-          echo "ERROR: RCLONE_CONTAINER is not set"
-          exit 1
-        fi
-
         echo "Cleaning up existing contents in remote container..."
-        rclone delete chi_tacc:$RCLONE_CONTAINER --rmdirs || true
+        rclone delete chi_tacc:object-persist-project-5 --rmdirs || true
 
-        rclone copy /data/AMMeBa-ContentManip chi_tacc:$RCLONE_CONTAINER \
-        --progress \
-        --transfers=32 \
-        --checkers=16 \
-        --multi-thread-streams=4 \
-        --fast-list
+        echo "Uploading new content to object store..."
+        rclone copy /data/AMMeBa-ContentManip chi_tacc:object-persist-project-5 \
+          --progress \
+          --transfers=32 \
+          --checkers=16 \
+          --multi-thread-streams=4 \
+          --fast-list
 
-        echo "Listing directories after load:"
-        rclone lsd chi_tacc:$RCLONE_CONTAINER
+        echo "Listing directories after upload:"
+        rclone lsd chi_tacc:object-persist-project-5
