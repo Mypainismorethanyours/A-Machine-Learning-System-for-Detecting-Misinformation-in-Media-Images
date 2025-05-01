@@ -2,13 +2,27 @@ FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 USER ${NB_UID}
 
-# Install Lightning
-RUN pip install --pre --no-cache-dir lightning && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
+# 设置工作目录
+WORKDIR /workspace
 
-# Install MLFlow and pynvml library used by MLFlow for monitoring NVIDIA GPU
-RUN pip install --pre --no-cache-dir pynvml && \
-    pip install --pre --no-cache-dir mlflow && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
+# 安装系统工具
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Python 包
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+        jupyter \
+        notebook \
+        jupyterlab \
+        ipywidgets \
+        matplotlib \
+        pandas \
+        mlflow \
+        pynvml
+
+# 设置 Jupyter Notebook 的默认启动命令
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
