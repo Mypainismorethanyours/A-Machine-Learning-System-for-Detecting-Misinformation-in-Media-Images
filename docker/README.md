@@ -1,3 +1,5 @@
+git clone --recurse-submodules https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images"
+
 docker build -t jupyter-mlflow -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/docker/Dockerfile.jupyter-torch-mlflow-cuda .
 
 docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/docker/docker-compose-mlflow.yaml up -d
