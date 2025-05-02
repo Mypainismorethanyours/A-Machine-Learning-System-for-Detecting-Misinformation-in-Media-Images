@@ -2,17 +2,17 @@ FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
 USER ${NB_UID}
 
-# 设置工作目录
+# Set the working directory
 WORKDIR /workspace
 
-# 安装系统工具
+# Install system tools
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     unzip \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 包
+# Install Python packages
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir \
         jupyter \
@@ -24,5 +24,5 @@ RUN pip install --upgrade pip && \
         mlflow \
         pynvml
 
-# 设置 Jupyter Notebook 的默认启动命令
+# Set the default startup command for Jupyter Notebook
 CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
