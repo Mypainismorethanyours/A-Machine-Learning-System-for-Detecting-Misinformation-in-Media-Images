@@ -105,8 +105,7 @@ def predict(messages, model):
 
 if __name__ == "__main__":
 
-    mlflow.set_tracking_uri("http://129.114.109.15:8000/")
-    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetuning Multi GPU")
+    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetuning Multi-GPU")
 
     ds_config = {
         "train_micro_batch_size_per_gpu": 1,
