@@ -12,7 +12,6 @@ from transformers import (
 )
 import json
 import mlflow
-import mlflow.pytorch
 import os
 from transformers.integrations import HfDeepSpeedConfig
 
@@ -106,6 +105,9 @@ def predict(messages, model):
 
 if __name__ == "__main__":
 
+    mlflow.set_tracking_uri("http://129.114.109.15:8000/")
+    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetuning Multi GPU")
+
     ds_config = {
         "train_micro_batch_size_per_gpu": 1,
         "gradient_accumulation_steps": 4,
@@ -172,7 +174,7 @@ if __name__ == "__main__":
         gradient_accumulation_steps=4,  
         logging_steps=10,
         logging_first_step=5,
-        num_train_epochs=2,
+        num_train_epochs=1,
         save_steps=100,
         learning_rate=1e-4,
         save_on_each_node=True,
@@ -193,3 +195,8 @@ if __name__ == "__main__":
     
     with mlflow.start_run(log_system_metrics=True) as run:
         trainer.train()
+        model_info = mlflow.transformers.log_model(
+            transformers_model=peft_model,
+            artifact_path="Qwen2.5-VL-3B-Instruct-Fintuned",
+            registered_model_name="Qwen2.5-VL-3B-Instruct-Fintuned-Multi-GPU-All"
+        )
