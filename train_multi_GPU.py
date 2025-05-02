@@ -12,6 +12,7 @@ from transformers import (
 )
 import json
 import mlflow
+import mlflow.pytorch
 import os
 from transformers.integrations import HfDeepSpeedConfig
 
@@ -149,7 +150,7 @@ if __name__ == "__main__":
     )
     model.enable_input_require_grads() 
 
-    train_ds = Dataset.from_json("/home/cc/train/train.json")
+    train_ds = Dataset.from_json("./train/train.json")
     train_dataset = train_ds.map(process_func)
 
     # 配置LoRA
@@ -190,4 +191,5 @@ if __name__ == "__main__":
     )
 
     
-    trainer.train()
+    with mlflow.start_run(log_system_metrics=True) as run:
+        trainer.train()
