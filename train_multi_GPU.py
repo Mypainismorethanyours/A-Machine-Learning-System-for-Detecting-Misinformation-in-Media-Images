@@ -8,12 +8,17 @@ from transformers import (
     DataCollatorForSeq2Seq,
     Qwen2_5_VLForConditionalGeneration,
     AutoProcessor,
-    AutoTokenizer
+    AutoTokenizer,
+    TrainerCallback, 
+    TrainerControl, 
+    TrainerState
 )
 import json
 import mlflow
 import os
 from transformers.integrations import HfDeepSpeedConfig
+import shutil
+import torch.distributed as dist
 
 def process_func(example):
 
@@ -102,10 +107,26 @@ def predict(messages, model):
     
     return output_text[0]
 
+class SaveBestTrainLossCallback(TrainerCallback):
+    def __init__(self, output_dir):
+        self.best_loss = float("inf")
+        self.output_dir = output_dir
+
+    def on_log(self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
+        logs = logs or {}
+        if "loss" in logs:
+            current_loss = logs["loss"]
+            if current_loss < self.best_loss:
+                self.best_loss = current_loss
+                output_path = os.path.join(self.output_dir, "best_train_loss")
+                kwargs["model"].save_pretrained(output_path)
+                tokenizer.save_pretrained(output_path)
+                processor.save_pretrained(output_path)
+                print(f"Saved new best model with train loss: {current_loss:.4f}")
 
 if __name__ == "__main__":
 
-    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetuning Multi-GPU")
+    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetune Multi-GPU")
 
     ds_config = {
         "train_micro_batch_size_per_gpu": 1,
@@ -152,6 +173,7 @@ if __name__ == "__main__":
     model.enable_input_require_grads() 
 
     train_ds = Dataset.from_json("./train/train.json")
+    # train_ds = train_ds.select(range(100))
     train_dataset = train_ds.map(process_func)
 
     # 配置LoRA
@@ -180,22 +202,39 @@ if __name__ == "__main__":
         gradient_checkpointing=True,
         report_to="mlflow",
         bf16=True,
-        deepspeed=ds_config,  
+        deepspeed=ds_config, 
+        # eval_strategy="steps",       
+        # eval_steps=100,                  
+        # save_total_limit=1,                
+        # load_best_model_at_end=True,       
+        # metric_for_best_model="eval_loss", 
+        # greater_is_better=False,
     )
-
     
     trainer = Trainer(
         model=peft_model,
         args=args,
         train_dataset=train_dataset,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True),
+        callbacks=[SaveBestTrainLossCallback(output_dir="./output/Qwen2.5-VL-3B-Instruct/best_step")]
     )
 
     
     with mlflow.start_run(log_system_metrics=True) as run:
         trainer.train()
-        model_info = mlflow.transformers.log_model(
-            transformers_model=peft_model,
-            artifact_path="Qwen2.5-VL-3B-Instruct-Fintuned",
-            registered_model_name="Qwen2.5-VL-3B-Instruct-Fintuned-Multi-GPU-All"
+        # merged_model  = peft_model.merge_and_unload()
+        save_path = './output/Qwen2.5-VL-3B-Instruct/best_step'
+        # trainer.save_model(save_path)
+        shutil.make_archive("best_step", 'zip', save_path)
+        # merged_model .save_pretrained(save_path)
+        mlflow.log_artifact("best_step.zip", artifact_path="Qwen2.5-VL-3B-Instruct-Fintune")
+        result = mlflow.register_model(
+            model_uri=f"runs:/{run.info.run_id}/Qwen2.5-VL-3B-Instruct-Fintuned",
+            name="Qwen2.5-VL-3B-Instruct-Fintune-4GPUs-Full"
         )
+        # model_info = mlflow.transformers.log_model(
+        #     transformers_model="./output/Qwen2.5-VL-3B-Instruct/best_step",
+        #     artifact_path="Qwen2.5-VL-3B-Instruct-Fintuned",
+        #     registered_model_name="Qwen2.5-VL-3B-Instruct-Fintuned-2-GPU-100Samples",
+        #     task="text-generation"
+        # )
