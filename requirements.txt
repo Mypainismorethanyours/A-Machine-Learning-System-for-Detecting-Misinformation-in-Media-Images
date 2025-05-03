@@ -6,3 +6,5 @@ mlflow
 torchvision
 pandas
 deepspeed
+scikit-learn 
+bert-score
