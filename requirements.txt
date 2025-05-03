@@ -6,3 +6,9 @@ mlflow
 torchvision
 pandas
 deepspeed
+scikit-learn 
+bert-score
+evaluate 
+rouge_score
+nltk
+absl-py
