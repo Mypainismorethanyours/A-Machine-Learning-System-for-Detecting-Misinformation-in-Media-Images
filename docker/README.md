@@ -7,5 +7,5 @@ docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Medi
 
 HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4)
 
-docker run -it --rm --gpus all -p 8888:8888 -v $(pwd):/workspace -e MLFLOW_TRACKING_URI=http://${HOST_IP}:8000 jupyter-mlflow
+docker run -it --rm --gpus all -p 8888:8888 --shm-size=8g -v $(pwd):/workspace -e MLFLOW_TRACKING_URI=http://${HOST_IP}:8000 jupyter-mlflow
 ```
