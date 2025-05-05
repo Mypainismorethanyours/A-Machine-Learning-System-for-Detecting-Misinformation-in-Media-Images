@@ -1,13 +1,26 @@
-FROM quay.io/jupyter/pytorch-notebook:latest
+FROM pytorch/pytorch:2.5.1-cuda12.4-cudnn9-devel
 
-USER ${NB_UID}
+# Set the working directory
+WORKDIR /workspace
 
-# Install Lightning
-RUN pip install --pre --no-cache-dir lightning && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
+# Install system tools
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Ray
-RUN pip install --pre --no-cache-dir ray && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
+# Install Python packages
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+        jupyter \
+        notebook \
+        jupyterlab \
+        ipywidgets \
+        matplotlib \
+        pandas \
+        ray \
+        pynvml
+
+# Set the default startup command for Jupyter Notebook
+CMD ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"]
