@@ -1,5 +1,11 @@
 # Backend for handling model inferencing on user uploaded image
 # This component of the ML system is defined as a FastAPI app endpoint
+# 5/9/25 : Updated the file to support optimization strategies.
+#The Updates process :
+# Model is loaded with the optimization strategies that are recommended based on the results from the optimization strategies pipeline tests
+#The recommended optimization strategies are loaded from a json file that gets updates with the recommended optimzations for the current model
+#This ensures that the inference service uses the most optimal model / optimization configuration
+
 
 # Import necessary dependencies
 import torch
@@ -15,7 +21,8 @@ from pydantic import BaseModel, Field
 from PIL import Image
 
 #=========================== App Startup Process =============================#
-#FastAPI app is initialized -> loadmodel() function call -> model components loaded into memory -> model set to eval mode 
+#FastAPI app is initialized -> loadmodel() function call -> recomended optimizations loaded from json file loaded into memory -> model set to eval mode 
+#
 
 # Model specific imports
 from transformers import (
@@ -45,12 +52,57 @@ class PredictionResponse(BaseModel):
 app = FastAPI(
     title="ML System for Detecting-Misinformation-in-Media-Images",
     description="API endpoint for model inferencing on user submitted data",
-    version="1.0.0"
+    version="2.0.0" 
 )
 
-# Function to load the model and its components
+#load recommended optimization strategies based on the results from the optimization stratgies tests pipeline
+class ModelConfig:
+    ""Configuration for model optimiation""
+    def _init_ (self):
+        #Load con figuration from enviro/ file
+        config_path = os.environ.get("MODEL_CONFIG_PATH", "./config.json")
+
+        #Default configs
+        self.default_config = {
+            "optimization_type": "bf16",
+            "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
+            "checkpoint_path": "./output/Qwen2.5-VL-3B-Instruct/checkpoint-600",
+            "optimization_config"
+        }
+        # Try to load configuration file
+        if os.path.exists(config_path):
+            with open(config_path, 'r') as f:
+                file_config = json.load(f)
+                self.config = {**self.default_config, **file_config}
+                logger.info(f"Loaded configuration from {config_path}")
+        else:
+            self.config = self.default_config
+            logger.info("Using default configuration")
+        
+        # Override with environment variables
+        self.optimization_type = os.environ.get("OPTIMIZATION_TYPE", self.config["optimization_type"])
+        self.model_id = os.environ.get("MODEL_ID", self.config["model_id"])
+        self.checkpoint_path = os.environ.get("CHECKPOINT_PATH", self.config["checkpoint_path"])
+
+# Function to load the model + its components with optimization configuration
+def load_model_with_optimization(config:ModelConfig):
+    ""Load the model with the specified optim. strategies""
+    try: 
+        optimization_type = config.optimization_type
+        model_id = config.model_id
+        checkpoint_path = config.checkpoint_path
+
+        # Check for GPU availability
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.info(f"Using device: {device}")
+        
+        # Load tokenizer and processor
+        tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
+        processor = AutoProcessor.from_pretrained(model_id)
+
+
 def load_model():
-    """Load the model and initialize + return all necessary components."""
+    """Load the model and initialize + return all necessary model components as a dict."""
     try:
         model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
         checkpoint_path = os.environ.get("CHECKPOINT_PATH", "./output/Qwen2.5-VL-3B-Instruct/checkpoint-600")
@@ -62,13 +114,51 @@ def load_model():
         # Load tokenizer and processor
         tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
         processor = AutoProcessor.from_pretrained(model_id)
+
+        #Model loading arguments bsed on optim type
+        model_kwargs = {
+            "device_map": "auto",
+        }
+        
+        # Apply Optimization specific configs 
+        if optimization_type == "baseline" or optimization_type == "bf16":
+            model_kwargs["torch_dtype"] == torch.bfloat16
+        elif optimization_type == "fp16":
+            model_kwargs["torch_dtype"] = torch.float16
+        elif optimization_type == "quantization_8bit":
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_8bit=True,
+                bnb_8bit_compute_dtype = torch.float16,
+                bnb_8bit_use_double_quant = True
+
+            )
+        elif optimization_type == "quantization_4bit":
+            model_kwargs["quantization_config"] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_use_double_quant=True
+            )
+        
+        elif optimization_type == "flash_attention":
+            model_kwargs["torch_dtype"] = torch.bfloat16
+            # Flash attention will be enabled after model loading
+        
+        else:
+            logger.warning(f"Unknown optimization type: {optimization_type}, using bf16")
+            model_kwargs["torch_dtype"] = torch.bfloat16
         
         # Load base model from HuggingFace 
         model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_id,
-            torch_dtype=torch.bfloat16,
-            device_map="auto",
+            **model_kwargs
         )
+
+        # Enable flash attention if requested
+        if optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
+            model.config.use_flash_attention_2 = True
+            logger.info("Flash Attention 2 enabled")
+
         
         # Configure LoRA adapter for inference
         val_config = LoraConfig(
@@ -91,6 +181,11 @@ def load_model():
         
         # Set the model to evaluation mode
         peft_model.eval()
+
+        # Log model configuration
+        logger.info(f"Model loaded successfully with optimization: {optimization_type}")
+        logger.info(f"Model dtype: {next(peft_model.parameters()).dtype}")
+        logger.info(f"Device: {next(peft_model.parameters()).device}")
         
         # Return all the model components as a dictionary 
         return {
@@ -103,6 +198,9 @@ def load_model():
     except Exception as e:
         logger.error(f"Error loading model: {str(e)}")
         return None
+#Load configuration 
+model_config = ModelConfig()
+
 
 # Load model components into memory at startup (as opposed to when the request arrives)
 logger.info("Loading model components...")
@@ -272,7 +370,24 @@ def model_predict(request: ImageRequest):
 # Store startup time for health check
 app_start_time = datetime.now()
 
-# to check that the model has been loaded and is ready 
+# NEW: Endpoint to check the optimization statuss
+@app.get("/optimization_info")
+def get_optimization_info():
+    """Get information about the current optimization configuration"""
+    if model_components is None:
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    
+    return {
+        "optimization_type": model_components.get("optimization_type", "unknown"),
+        "model_id": model_config.model_id,
+        "checkpoint_path": model_config.checkpoint_path,
+        "device": str(model_components.get("device", "unknown")),
+        "model_dtype": str(next(model_components["model"].parameters()).dtype),
+        "model_load_time": model_load_time
+    }
+
+#To check that the model has been loaded and is ready 
+#This is updated to include optimization info 
 @app.get("/health")
 def health_check():
     """Health check endpoint."""
@@ -281,6 +396,7 @@ def health_check():
     return {
         "status": "healthy" if model_components is not None else "degraded",
         "model_loaded": model_components is not None,
+        "optimization_type": model_components.get("optimization_type","unkown")
         "model_load_time": model_load_time if model_components is not None else None,
         "uptime_seconds": uptime
     }
