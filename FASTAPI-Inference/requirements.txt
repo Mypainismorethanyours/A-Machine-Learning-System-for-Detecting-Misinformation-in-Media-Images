@@ -1,0 +1,27 @@
+#FastAPI dependencies 
+
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+pydantic==2.5.0
+
+#model specific dependencies 
+torch==2.1.2+cu121
+torchvision==0.16.2+cu121
+--extra-index-url https://download.pytorch.org/whl/cu121
+
+#Hugging Face and model specific dependencies
+transformers==4.36.2
+peft==0.7.1
+accelerate==0.25.0
+safetensors==0.4.1
+sentencepiece==0.1.99
+protobuf==3.20.3
+
+#Processing
+Pillow ==10.1.0
+opencv-python-headless==4.8.1.78
+
+#utilities
+python-dotenv==1.0.0
+typing-extensions==4.90
