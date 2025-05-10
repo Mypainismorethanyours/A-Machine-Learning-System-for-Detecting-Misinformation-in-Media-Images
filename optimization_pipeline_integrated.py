@@ -1,3 +1,6 @@
+# defines a comprehensive model level optimization pipeline that is designed to 
+#systematically test differnt optimization techniques on a train Qwen vision-language model
+#based on the results the best optimization strategies are idetified and saved in a json file 
 import torch
 import time
 import json
@@ -5,8 +8,7 @@ import os
 import mlflow
 from datetime import datetime
 from typing import Dict, List, Any, Optional
-from dataclasses import dataclass, asdict
-from prometheus_client import CollectorRegistry, Gauge, Counter, Histogram, write_to_textfile
+from dataclasses import dataclass, asdict, field
 import numpy as np
 from transformers import (
     Qwen2_5_VLForConditionalGeneration,
@@ -20,30 +22,7 @@ from PIL import Image
 import psutil
 import GPUtil
 
-# Prometheus metrics
-registry = CollectorRegistry()
-
-optimization_duration = Histogram(
-    'model_optimization_duration_seconds',
-    'Time spent evaluating optimization',
-    ['model_type', 'optimization_type'],
-    registry=registry
-)
-
-model_inference_time = Gauge(
-    'model_inference_time_ms',
-    'Model inference time in milliseconds',
-    ['model_type', 'optimization_type', 'model_version'],
-    registry=registry
-)
-
-model_memory_usage_bytes = Gauge(
-    'model_memory_usage_bytes',
-    'Model memory usage in bytes',
-    ['model_type', 'optimization_type', 'model_version'],
-    registry=registry
-)
-
+#stores all of the metrics and resukts for each optimization test, we can then comparew the results in a standardized way
 @dataclass
 class OptimizationResult:
     name: str
@@ -61,6 +40,15 @@ class OptimizationResult:
     gpu_utilization_percent: float
     cuda_memory_allocated_mb: float
     mlflow_run_id: Optional[str] = None
+    latency_percentiles: Dict[str,float] = field(default_factory=dict)
+
+#overview of proces that occurs 
+# Loads the base model and checkpoint
+# applies different optimizations
+#measures performance, in relation to the optimization strategy applied that applied to the modle 
+#generates a reoport based on the result of the optimization and the optimization with the best performncae relative to the requirmensts for our model are
+#save + recommended as an optimiation strategy to apply 
+
 
 class QwenModelOptimizer:
     def __init__(self, base_model_id: str, checkpoint_path: str, test_dataset_path: str, 
@@ -71,6 +59,7 @@ class QwenModelOptimizer:
         self.model_version = model_version
         self.mlflow_experiment_name = mlflow_experiment_name or "Model Optimization"
         self.results = []
+        self.baseline_metrics = None
         
         # Setup directories
         self.results_dir = f"./optimization_results/{model_version}"
@@ -90,7 +79,108 @@ class QwenModelOptimizer:
             lora_dropout=0.05,
             bias="none",
         )
+
+    # Before applying model level optimizations we want to establish a baseline meausuremnt of the model size, the accuracy (on test data), inference latency per a single sample, 
+    # and the batch throughput per x number of samples
+
+    def baseline_measure_performance(self):
+
+        """Establish a baseline performance measurement without any optimizations : float32, no quantization"""
+
+        #load just the trained model itslef
+
+        print("="*50)
+        print("Measuring baseline inference performance")
+        print("="*50)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"Using:{device}")
+
+        #load base model fom hugg face
+
+        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            self.base_model_id,
+            torch_dtype = torch.float32,
+            device_map="auto"
+        )
+
+        # load weights for the fine tuned models
+        if os.path.exists(self.checkpoint_path):
+            model = PeftModel.from_pretrained(
+                model, 
+                self.checkpoint_path,  # "./output/Qwen2.5-VL-3B-Instruct/checkpoint-600"
+                config=self.lora_config
+            )
     
+        model.eval()
+
+        #measure the model size on the disk : doen via helper function 
+        model_size = self._get_model_size(model)
+        print(f"Model size: {model_size:.2f}MB")
+
+        # Prepare test data
+        #whats the path ?
+        test_samples = self._load_test_samples(num_samples=1)
+        single_sample = test_samples[0] if test_samples else None
+        
+        # Measure inference latency on single sample ( we do this for 100 trials and then compute the agregate statistics)
+        num_trials = 100
+        latencies = []
+
+        # Warm-up run
+        with torch.no_grad():
+            self._run_inference(single_sample, model, self.processor, device)
+
+        # Actual measurement
+        for i in range(num_trials):
+            start_time = time.time()
+            with torch.no_grad():
+                _ = self._run_inference(single_sample, model, self.processor, device)
+            end_time = time.time()
+            latencies.append((end_time - start_time) * 1000)  # Convert to ms
+        
+
+        # Calculate statistics (like in lab)
+        median_latency = np.median(latencies)
+        percentile_95 = np.percentile(latencies, 95)
+        percentile_99 = np.percentile(latencies, 99)
+        throughput = num_trials / np.sum(latencies) * 1000  # FPS
+        
+        print(f"Inference Latency (single sample, median): {median_latency:.1f} ms")
+        print(f"Inference Latency (single sample, 95th percentile): {percentile_95:.1f} ms")
+        print(f"Inference Latency (single sample, 99th percentile): {percentile_99:.1f} ms")
+        print(f"Inference Throughput (single sample): {throughput:.2f} FPS")
+        
+        # Create baseline result
+        baseline_result = OptimizationResult(
+            name="baseline",
+            model_type="qwen2_vl",
+            model_version=self.model_version,
+            optimization_type="baseline",
+            model_size_mb=model_size,
+            inference_time_ms=median_latency,
+            memory_usage_mb=0,  # Will measure if needed
+            accuracy_metrics={"accuracy": 0.0},
+            config={},
+            load_time_s=0,
+            throughput_images_per_sec=throughput,
+            timestamp=datetime.now().isoformat(),
+            gpu_utilization_percent=0,
+            cuda_memory_allocated_mb=0,
+            latency_percentiles={
+                "50th": median_latency,
+                "95th": percentile_95,
+                "99th": percentile_99
+            }
+        )
+        
+        self.baseline_metrics = baseline_result
+        self.results.append(baseline_result)
+        
+        print("="*50)
+        return baseline_result
+    
+
     def load_model_with_optimization(self, optimization_type: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
         """Load model with specified optimization"""
         config = config or {}
@@ -102,7 +192,11 @@ class QwenModelOptimizer:
         
         # Apply optimization-specific configurations
         if optimization_type == "baseline":
+            model_kwargs["torch_dtype"] = torch.float32
+        elif optimization_type == "bf16":
             model_kwargs["torch_dtype"] = torch.bfloat16
+        elif optimization_type == "fp16":
+            model_kwargs["torch_dtype"] = torch.float16
         elif optimization_type == "quantization_8bit":
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_8bit=True,
@@ -117,13 +211,10 @@ class QwenModelOptimizer:
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_use_double_quant=True
             )
-        elif optimization_type == "fp16":
-            model_kwargs["torch_dtype"] = torch.float16
-        elif optimization_type == "bf16":
+        elif optimization_type == "torch_compile":
             model_kwargs["torch_dtype"] = torch.bfloat16
         elif optimization_type == "flash_attention":
             model_kwargs["torch_dtype"] = torch.bfloat16
-            # Flash attention will be enabled after model loading
         
         # Load base model
         load_start = time.time()
@@ -132,8 +223,10 @@ class QwenModelOptimizer:
             **model_kwargs
         )
         
-        # Enable flash attention if requested
-        if optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
+        # Apply post-loading optimizations
+        if optimization_type == "torch_compile":
+            model = torch.compile(model)
+        elif optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
             model.config.use_flash_attention_2 = True
         
         # Load LoRA weights if checkpoint exists
@@ -153,7 +246,7 @@ class QwenModelOptimizer:
             "load_time": load_time,
             "optimization_type": optimization_type
         }
-    
+        
     def measure_performance(self, model_components: Dict, num_samples: int = 10) -> Dict[str, float]:
         """Measure model performance metrics"""
         model = model_components["model"]
@@ -274,24 +367,20 @@ class QwenModelOptimizer:
         """Evaluate a single optimization configuration"""
         config = config or {}
         
-        # Start MLflow run
+        # Start MLflow run: the tracking starts here 
         mlflow.set_experiment(self.mlflow_experiment_name)
         with mlflow.start_run(nested=True, run_name=f"optimization_{optimization_type}_{self.model_version}") as run:
+            
             # Log parameters
             mlflow.log_param("optimization_type", optimization_type)
             mlflow.log_param("model_version", self.model_version)
             mlflow.log_params(config)
             
-            # Load model with optimization
-            with optimization_duration.labels(
-                model_type="qwen2_vl",
-                optimization_type=optimization_type
-            ).time():
-                model_components = self.load_model_with_optimization(optimization_type, config)
+            model_components = self.load_model_with_optimization(optimization_type, config)
+                    
+            # Measure performance
+            metrics = self.measure_performance(model_components)
                 
-                # Measure performance
-                metrics = self.measure_performance(model_components)
-            
             # Log metrics to MLflow
             mlflow.log_metric("model_size_mb", metrics["model_size_mb"])
             mlflow.log_metric("inference_time_ms", metrics["inference_time_ms"])
@@ -299,7 +388,7 @@ class QwenModelOptimizer:
             mlflow.log_metric("throughput_images_per_sec", metrics["throughput_images_per_sec"])
             mlflow.log_metric("gpu_utilization_percent", metrics["gpu_utilization_percent"])
             mlflow.log_metric("load_time_s", model_components["load_time"])
-            
+                
             # Create result
             result = OptimizationResult(
                 name=f"{optimization_type}_{json.dumps(config)}",
@@ -309,7 +398,7 @@ class QwenModelOptimizer:
                 model_size_mb=metrics["model_size_mb"],
                 inference_time_ms=metrics["inference_time_ms"],
                 memory_usage_mb=metrics["memory_usage_mb"],
-                accuracy_metrics={"accuracy": 0.0},  # You can add actual accuracy evaluation here
+                accuracy_metrics={"accuracy": 0.0},
                 config=config,
                 load_time_s=model_components["load_time"],
                 throughput_images_per_sec=metrics["throughput_images_per_sec"],
@@ -319,23 +408,9 @@ class QwenModelOptimizer:
                 mlflow_run_id=run.info.run_id
             )
             
-            # Update Prometheus metrics
-            self._update_prometheus_metrics(result)
-            
             self.results.append(result)
             return result
-    
-    def _update_prometheus_metrics(self, result: OptimizationResult):
-        """Update Prometheus metrics"""
-        labels = {
-            'model_type': result.model_type,
-            'optimization_type': result.optimization_type,
-            'model_version': result.model_version
-        }
         
-        model_inference_time.labels(**labels).set(result.inference_time_ms)
-        model_memory_usage_bytes.labels(**labels).set(result.memory_usage_mb * 1024 * 1024)
-    
     def run_optimization_suite(self, optimizations_to_test: List[Dict[str, Any]]) -> List[OptimizationResult]:
         """Run multiple optimization configurations"""
         results = []
@@ -360,10 +435,6 @@ class QwenModelOptimizer:
         results_data = [asdict(r) for r in self.results]
         with open(results_file, 'w') as f:
             json.dump(results_data, f, indent=2)
-        
-        # Save Prometheus metrics
-        metrics_file = os.path.join(self.results_dir, 'metrics.prom')
-        write_to_textfile(metrics_file, registry)
         
         # Generate report
         report = self.generate_report()

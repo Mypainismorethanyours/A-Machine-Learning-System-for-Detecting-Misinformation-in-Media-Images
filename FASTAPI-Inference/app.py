@@ -19,10 +19,46 @@ from typing import Tuple
 from datetime import datetime
 from pydantic import BaseModel, Field
 from PIL import Image
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST
 
 #=========================== App Startup Process =============================#
 #FastAPI app is initialized -> loadmodel() function call -> recomended optimizations loaded from json file loaded into memory -> model set to eval mode 
 #
+
+
+
+
+# Define metrics for production monitoring
+REQUEST_COUNT = Counter(
+    'model_prediction_requests_total', 
+    'Total prediction requests',
+    ['model_version', 'optimization_type', 'status']
+)
+
+REQUEST_LATENCY = Histogram(
+    'model_prediction_duration_seconds', 
+    'Prediction request latency',
+    ['model_version', 'optimization_type']
+)
+
+MODEL_MEMORY_USAGE = Gauge(
+    'model_memory_usage_mb',
+    'Model memory usage in MB',
+    ['model_version', 'optimization_type']
+)
+
+GPU_UTILIZATION = Gauge(
+    'model_gpu_utilization_percent',
+    'GPU utilization percentage',
+    ['model_version', 'optimization_type']
+)
+
+
+
+
+
+
 
 # Model specific imports
 from transformers import (
