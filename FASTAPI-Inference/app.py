@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from PIL import Image
 from prometheus_client import Counter, Histogram, Gauge, generate_latest
 from prometheus_client import CONTENT_TYPE_LATEST
+from prometheus_fastapi_instrumentator import Instrumentator
 
 #=========================== App Startup Process =============================#
 #FastAPI app is initialized -> loadmodel() function call -> recomended optimizations loaded from json file loaded into memory -> model set to eval mode 
@@ -451,6 +452,8 @@ def root():
             "/docs": "GET - API documentation"
         }
     }
+
+Instrumentator().instrument(app).expose(app)
 
 if __name__ == "__main__":
     import uvicorn
