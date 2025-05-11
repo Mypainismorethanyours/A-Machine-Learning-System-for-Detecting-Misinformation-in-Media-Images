@@ -59,7 +59,7 @@ The table below shows an example, it is not a recommendation. -->
 
 | Requirement         | How many/when                                     | Justification                          |
 |---------------------|---------------------------------------------------|----------------------------------------|
-| `m1.medium` VMs     | 3 for entire project duration                     |For training, serving and tracking      |
+| `m1.xxlarge` VMs     | 3 for entire project duration                     |For training, serving and tracking      |
 | `A100 or gpu_mi100` | 4 hour block twice a week                         |Used for MLLM fine-tune                 |
 | Floating IPs        | 1 for entire project duration, 1 for sporadic use |One for Project and one for partial test|
 
