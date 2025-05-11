@@ -82,6 +82,7 @@ class QwenModelOptimizer:
 
     # Before applying model level optimizations we want to establish a baseline meausuremnt of the model size, the accuracy (on test data), inference latency per a single sample, 
     # and the batch throughput per x number of samples
+    #
 
     def baseline_measure_performance(self):
 
@@ -122,6 +123,14 @@ class QwenModelOptimizer:
         #whats the path ?
         test_samples = self._load_test_samples(num_samples=1)
         single_sample = test_samples[0] if test_samples else None
+
+        # Add accuracy measurement
+        print("Measuring baseline accuracy...")
+        accuracy_metrics = self.calculate_accuracy(
+            {"model": model, "processor": self.processor, "device": device},
+            num_samples=50  # Adjust based on your needs
+        )
+        print(f"Baseline Accuracy: {accuracy_metrics['accuracy']:.2f}%")
         
         # Measure inference latency on single sample ( we do this for 100 trials and then compute the agregate statistics)
         num_trials = 100
@@ -140,16 +149,27 @@ class QwenModelOptimizer:
             latencies.append((end_time - start_time) * 1000)  # Convert to ms
         
 
-        # Calculate statistics (like in lab)
+        # Calculate statistics (like in the lab)
         median_latency = np.median(latencies)
         percentile_95 = np.percentile(latencies, 95)
         percentile_99 = np.percentile(latencies, 99)
-        throughput = num_trials / np.sum(latencies) * 1000  # FPS
+        
         
         print(f"Inference Latency (single sample, median): {median_latency:.1f} ms")
         print(f"Inference Latency (single sample, 95th percentile): {percentile_95:.1f} ms")
         print(f"Inference Latency (single sample, 99th percentile): {percentile_99:.1f} ms")
-        print(f"Inference Throughput (single sample): {throughput:.2f} FPS")
+       
+        # Add batch throughput measurement
+        print("\nMeasuring batch throughput...")
+        batch_metrics = self.measure_batch_throughput(
+            {"model": model, "processor": self.processor, "device": device},
+            batch_sizes=[1, 4, 8, 16]
+        )
+
+        print(f"Optimal batch size: {batch_metrics['optimal_batch_size']}")
+        print(f"Maximum throughput: {batch_metrics['max_throughput_images_per_sec']:.2f} images/second")
+        
+
         
         # Create baseline result
         baseline_result = OptimizationResult(
@@ -160,10 +180,13 @@ class QwenModelOptimizer:
             model_size_mb=model_size,
             inference_time_ms=median_latency,
             memory_usage_mb=0,  # Will measure if needed
-            accuracy_metrics={"accuracy": 0.0},
-            config={},
+            accuracy_metrics=accuracy_metrics,
+            config={
+                "batch_throughput": batch_metrics['throughput_by_batch_size'],
+                "optimal_batch_size": batch_metrics['optimal_batch_size']
+            },
             load_time_s=0,
-            throughput_images_per_sec=throughput,
+            throughput_images_per_sec=batch_metrics['max_throughput_images_per_sec'],
             timestamp=datetime.now().isoformat(),
             gpu_utilization_percent=0,
             cuda_memory_allocated_mb=0,
@@ -172,6 +195,7 @@ class QwenModelOptimizer:
                 "95th": percentile_95,
                 "99th": percentile_99
             }
+            
         )
         
         self.baseline_metrics = baseline_result
@@ -179,7 +203,141 @@ class QwenModelOptimizer:
         
         print("="*50)
         return baseline_result
-    
+
+    def calculate_accuracy(self, model_components: Dict, num_samples: int = 50) -> Dict[str, float]:
+        """Calculate model accuracy on test samples"""
+        model = model_components["model"]
+        processor = model_components["processor"]
+        device = model_components["device"]
+        
+        test_samples = self._load_test_samples(num_samples)
+        
+        correct = 0
+        total = 0
+        
+        # Keywords for classification
+        positive_keywords = ["manipulated", "synthesized", "edited", "fake", "generated", "artificial"]
+        negative_keywords = ["real", "authentic", "original", "genuine", "unedited"]
+        
+        for sample in test_samples:
+            _, generated_text, ground_truth = self._run_inference(
+                sample, model, processor, device, return_text=True
+            )
+            
+            if generated_text and ground_truth:
+                generated_lower = generated_text.lower()
+                
+                # Simple keyword-based classification
+                is_positive_pred = any(keyword in generated_lower for keyword in positive_keywords)
+                is_negative_pred = any(keyword in generated_lower for keyword in negative_keywords)
+                
+                is_positive_truth = any(keyword in ground_truth for keyword in positive_keywords)
+                
+                if is_positive_pred and is_positive_truth:
+                    correct += 1
+                elif is_negative_pred and not is_positive_truth:
+                    correct += 1
+                
+                total += 1
+        
+        accuracy = (correct / total * 100) if total > 0 else 0.0
+        
+        return {
+            "accuracy": accuracy,
+            "total_samples": total,
+            "correct_predictions": correct
+        }
+    #helper function to measure the rate ate which the model can return predictions for batches of data 
+    def measure_batch_throughput(self, model_components: Dict, batch_sizes: List[int] = [1, 4, 8, 16]) -> Dict[str, float]:
+        """Measure actual batch throughput at different batch sizes"""
+        model = model_components["model"]
+        processor = model_components["processor"]
+        device = model_components["device"]
+        
+        throughput_results = {}
+        
+        for batch_size in batch_sizes:
+            print(f"Measuring throughput for batch size {batch_size}...")
+            
+            # Load enough samples for batching
+            test_samples = self._load_test_samples(num_samples=batch_size * 5)  # 5 batches worth
+            
+            if len(test_samples) < batch_size:
+                print(f"Not enough samples for batch size {batch_size}, skipping...")
+                continue
+            
+            # Warm-up
+            self._run_batch_inference(test_samples[:batch_size], model, processor, device)
+            
+            # Measure batch throughput
+            num_batches = len(test_samples) // batch_size
+            total_images = num_batches * batch_size
+            
+            start_time = time.time()
+            
+            for i in range(num_batches):
+                batch_start = i * batch_size
+                batch_end = batch_start + batch_size
+                batch_samples = test_samples[batch_start:batch_end]
+                
+                self._run_batch_inference(batch_samples, model, processor, device)
+            
+            end_time = time.time()
+            total_time = end_time - start_time
+            
+            # Calculate throughput (images per second)
+            throughput = total_images / total_time
+            throughput_results[f"batch_{batch_size}"] = throughput
+            
+            print(f"Batch size {batch_size}: {throughput:.2f} images/second")
+        
+        # Find optimal batch size
+        optimal_batch_size = max(throughput_results.items(), key=lambda x: x[1])[0]
+        max_throughput = max(throughput_results.values())
+        
+        return {
+            "throughput_by_batch_size": throughput_results,
+            "optimal_batch_size": optimal_batch_size,
+            "max_throughput_images_per_sec": max_throughput
+        }
+    def _run_batch_inference(self, batch_samples: List[Dict], model, processor, device):
+        """Run inference on a batch of samples"""
+        batch_messages = []
+        batch_images = []
+        
+        for sample in batch_samples:
+            messages = [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "image": sample["image"]},
+                    {"type": "text", "text": "Has this image been manipulated or synthesized?"}
+                ]
+            }]
+            batch_messages.append(messages)
+            batch_images.append(sample["image"])
+        
+        # Process batch
+        batch_texts = []
+        all_image_inputs = []
+        
+        for messages in batch_messages:
+            text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+            batch_texts.append(text)
+            image_inputs, _ = process_vision_info(messages)
+            all_image_inputs.extend(image_inputs)
+        
+        # Create batch inputs
+        inputs = processor(
+            text=batch_texts, 
+            images=all_image_inputs, 
+            padding=True, 
+            return_tensors="pt"
+        ).to(device)
+        
+        with torch.no_grad():
+            generated_ids = model.generate(**inputs, max_new_tokens=128)
+        
+        return generated_ids
 
     def load_model_with_optimization(self, optimization_type: str, config: Dict[str, Any] = None) -> Dict[str, Any]:
         """Load model with specified optimization"""
@@ -252,6 +410,14 @@ class QwenModelOptimizer:
         model = model_components["model"]
         processor = model_components["processor"]
         device = model_components["device"]
+
+        accuracy_metrics = self.calculate_accuracy(model_components, num_samples=50)
+
+        # Measure batch throughput
+        batch_metrics = self.measure_batch_throughput(
+            model_components,
+            batch_sizes=[1, 4, 8, 16]
+        )
         
         # Load test dataset
         test_samples = self._load_test_samples(num_samples)
@@ -296,17 +462,26 @@ class QwenModelOptimizer:
         # Calculate metrics
         avg_inference_time = np.mean(inference_times) if inference_times else 0
         throughput = 1000 / avg_inference_time if avg_inference_time > 0 else 0
+
+        # Measure batch throughput
+        batch_metrics = self.measure_batch_throughput(
+            model_components,
+            batch_sizes=[1, 4, 8, 16]
+        )
         
         return {
             "model_size_mb": model_size_mb,
             "inference_time_ms": avg_inference_time,
             "memory_usage_mb": np.mean(memory_measurements) if memory_measurements else 0,
-            "throughput_images_per_sec": throughput,
+            "throughput_images_per_sec": batch_metrics['max_throughput_images_per_sec'],
+            "batch_throughput_metrics": batch_metrics,
             "gpu_utilization_percent": np.mean(gpu_utilizations) if gpu_utilizations else 0,
             "cuda_memory_allocated_mb": torch.cuda.max_memory_allocated(device) / (1024 * 1024) if torch.cuda.is_available() else 0
+            "accuracy": accuracy_metrics["accuracy"],
+            "accuracy_metrics": accuracy_metrics
         }
     
-    def _run_inference(self, sample: Dict, model, processor, device):
+    def _run_inference(self, sample: Dict, model, processor, device, return_text=False):
         """Run inference on a single sample"""
         messages = [{
             "role": "user",
@@ -322,6 +497,21 @@ class QwenModelOptimizer:
         
         with torch.no_grad():
             generated_ids = model.generate(**inputs, max_new_tokens=128)
+
+        if return_text:
+            # Decode the generated text
+            generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+            
+            # Extract ground truth from sample if available
+            ground_truth = None
+            if "item" in sample and "conversations" in sample["item"]:
+                # Assuming ground truth is in the assistant's response
+                for conv in sample["item"]["conversations"]:
+                    if conv.get("from") == "assistant":
+                        ground_truth = conv.get("value", "").lower()
+                        break
+            
+            return generated_ids, generated_text, ground_truth
         
         return generated_ids
     
@@ -388,6 +578,7 @@ class QwenModelOptimizer:
             mlflow.log_metric("throughput_images_per_sec", metrics["throughput_images_per_sec"])
             mlflow.log_metric("gpu_utilization_percent", metrics["gpu_utilization_percent"])
             mlflow.log_metric("load_time_s", model_components["load_time"])
+            mlflow.log_metric("accuracy", metrics["accuracy"])
                 
             # Create result
             result = OptimizationResult(
@@ -398,7 +589,7 @@ class QwenModelOptimizer:
                 model_size_mb=metrics["model_size_mb"],
                 inference_time_ms=metrics["inference_time_ms"],
                 memory_usage_mb=metrics["memory_usage_mb"],
-                accuracy_metrics={"accuracy": 0.0},
+                accuracy_metrics=["accuracy_metrics"],
                 config=config,
                 load_time_s=model_components["load_time"],
                 throughput_images_per_sec=metrics["throughput_images_per_sec"],
@@ -452,13 +643,20 @@ class QwenModelOptimizer:
         report += f"Base Model: {self.base_model_id}\n"
         report += f"Checkpoint: {self.checkpoint_path}\n"
         report += f"Timestamp: {datetime.now().isoformat()}\n\n"
+       
         
         # Summary table
         report += "## Optimization Summary\n\n"
-        report += "| Optimization | Model Size (MB) | Inference (ms) | Memory (MB) | Throughput (img/s) | GPU Util (%) | Load Time (s) |\n"
-        report += "|-------------|----------------|---------------|-------------|-------------------|--------------|---------------|\n"
-        
+        report += "| Optimization | Size (MB) | Inference (ms) | Memory (MB) | Throughput | GPU % | Accuracy % | Acc. Drop |\n"
+        report += "|-------------|-----------|----------------|-------------|------------|-------|------------|----------|\n"
+    
+        baseline_accuracy = self.baseline_metrics.accuracy_metrics.get("accuracy", 0.0)
+
         for result in self.results:
+
+            accuracy = result.accuracy_metrics.get("accuracy", 0.0)
+            accuracy_drop = baseline_accuracy - accuracy
+
             report += f"| {result.optimization_type} | {result.model_size_mb:.2f} | {result.inference_time_ms:.2f} | "
             report += f"{result.memory_usage_mb:.2f} | {result.throughput_images_per_sec:.2f} | "
             report += f"{result.gpu_utilization_percent:.1f} | {result.load_time_s:.2f} |\n"
@@ -473,6 +671,20 @@ class QwenModelOptimizer:
             report += f"- **Fastest Inference**: {best_speed.optimization_type} ({best_speed.inference_time_ms:.2f} ms)\n"
             report += f"- **Lowest Memory**: {best_memory.optimization_type} ({best_memory.memory_usage_mb:.2f} MB)\n"
             report += f"- **Highest Throughput**: {best_throughput.optimization_type} ({best_throughput.throughput_images_per_sec:.2f} img/s)\n"
+
+            report += "\n## Batch Throughput Analysis\n\n"
+    
+            for result in self.results:
+                if "batch_throughput" in result.config:
+                    report += f"\n### {result.optimization_type}\n"
+                    report += f"Optimal batch size: {result.config.get('optimal_batch_size', 'N/A')}\n"
+                    
+                    throughput_data = result.config.get('batch_throughput', {})
+                    if throughput_data:
+                        report += "\n| Batch Size | Throughput (img/s) |\n"
+                        report += "|------------|-------------------|\n"
+                        for batch_size, throughput in sorted(throughput_data.items()):
+                            report += f"| {batch_size.replace('batch_', '')} | {throughput:.2f} |\n"
         
         return report
     
