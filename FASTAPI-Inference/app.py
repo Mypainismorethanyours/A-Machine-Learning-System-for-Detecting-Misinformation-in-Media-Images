@@ -19,15 +19,11 @@ from typing import Tuple
 from datetime import datetime
 from pydantic import BaseModel, Field
 from PIL import Image
-from prometheus_client import Counter, Histogram, Gauge, generate_latest
-from prometheus_client import CONTENT_TYPE_LATEST
+from prometheus_client import Counter, Histogram, Gauge
 
 #=========================== App Startup Process =============================#
 #FastAPI app is initialized -> loadmodel() function call -> recomended optimizations loaded from json file loaded into memory -> model set to eval mode 
 #
-
-
-
 
 # Define metrics for production monitoring
 REQUEST_COUNT = Counter(
@@ -54,17 +50,12 @@ GPU_UTILIZATION = Gauge(
     ['model_version', 'optimization_type']
 )
 
-
-
-
-
-
-
 # Model specific imports
 from transformers import (
     Qwen2_5_VLForConditionalGeneration,
     AutoProcessor,
-    AutoTokenizer
+    AutoTokenizer,
+    BitsAndBytesConfig
 )
 
 from peft import PeftModel, LoraConfig, TaskType
@@ -93,9 +84,9 @@ app = FastAPI(
 
 #load recommended optimization strategies based on the results from the optimization stratgies tests pipeline
 class ModelConfig:
-    ""Configuration for model optimiation""
-    def _init_ (self):
-        #Load con figuration from enviro/ file
+    """Configuration for model optimization"""
+    def __init__(self):
+        #Load configuration from env file
         config_path = os.environ.get("MODEL_CONFIG_PATH", "./config.json")
 
         #Default configs
@@ -103,7 +94,7 @@ class ModelConfig:
             "optimization_type": "bf16",
             "model_id": "Qwen/Qwen2.5-VL-3B-Instruct",
             "checkpoint_path": "./output/Qwen2.5-VL-3B-Instruct/checkpoint-600",
-            "optimization_config"
+            "optimization_config": {}
         }
         # Try to load configuration file
         if os.path.exists(config_path):
@@ -119,23 +110,6 @@ class ModelConfig:
         self.optimization_type = os.environ.get("OPTIMIZATION_TYPE", self.config["optimization_type"])
         self.model_id = os.environ.get("MODEL_ID", self.config["model_id"])
         self.checkpoint_path = os.environ.get("CHECKPOINT_PATH", self.config["checkpoint_path"])
-
-# Function to load the model + its components with optimization configuration
-def load_model_with_optimization(config:ModelConfig):
-    ""Load the model with the specified optim. strategies""
-    try: 
-        optimization_type = config.optimization_type
-        model_id = config.model_id
-        checkpoint_path = config.checkpoint_path
-
-        # Check for GPU availability
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        logger.info(f"Using device: {device}")
-        
-        # Load tokenizer and processor
-        tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
-        processor = AutoProcessor.from_pretrained(model_id)
-
 
 def load_model():
     """Load the model and initialize + return all necessary model components as a dict."""
@@ -234,11 +208,11 @@ def load_model():
     except Exception as e:
         logger.error(f"Error loading model: {str(e)}")
         return None
+        
 #Load configuration 
 model_config = ModelConfig()
 
-
-# Load model components into memory at startup (as opposed to when the request arrives)
+# Load model components into memory at startup
 logger.info("Loading model components...")
 model_load_start = datetime.now()
 model_components = load_model()
@@ -432,12 +406,11 @@ def health_check():
     return {
         "status": "healthy" if model_components is not None else "degraded",
         "model_loaded": model_components is not None,
-        "optimization_type": model_components.get("optimization_type","unkown")
+        "optimization_type": model_components.get("optimization_type", "unknown"),
         "model_load_time": model_load_time if model_components is not None else None,
         "uptime_seconds": uptime
     }
 
-# basic api info 
 @app.get("/")
 def root():
     """Root endpoint."""
