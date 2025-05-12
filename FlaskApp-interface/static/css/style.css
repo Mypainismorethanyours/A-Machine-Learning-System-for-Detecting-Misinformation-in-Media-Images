@@ -101,7 +101,7 @@ body{
 
 .processing-time {
     text-align: center;
-    color: #666;
+    color: rgb(102, 102, 102);
     margin: 10px 0;
     font-size: 14px;
 }

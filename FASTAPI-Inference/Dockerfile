@@ -25,19 +25,20 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    build-essential \
     && apt-get clean \
-    && rm -�/var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 
 
-# Copy requirements first to leverage Docker cache
+# Copy requirements 
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install necessary Python dependencies
 RUN pip3 install --upgrade pip setuptools wheel && \
     pip3 install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy the application code
 COPY app.py .
 COPY qwen_vl_utils.py .
 
