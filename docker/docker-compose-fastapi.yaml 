@@ -1,0 +1,54 @@
+name: fastapi_endpoint
+services:
+  fastapi_server:
+    build:
+      context: ./FASTAPI-Inference  #the build context.ie the directory of where the docker file and all other files that the Dockerfile might need to COPY or ADD during the build
+                                    #dockerfile: Dockerfile # the docker file that creates the image
+      dockerfile: Dockerfile # the docker file that builds the  fastapi container 
+    container_name: fastapi_inference
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8000:8080"
+    environment:
+      - CHECKPOINT_PATH=/app/models/checkpoint-600
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./checkpoint-600:/app/models/checkpoint-600:ro
+
+  flask:
+    build:
+      context: ./FlaskApp-interface  # Fixed: Should match your directory name
+      dockerfile: Dockerfile
+    container_name: flaskapp_interface
+    ports:
+      - "80:5000"
+    environment:
+      - FASTAPI_SERVER_URL=http://fastapi_server:8080  # Correct: uses service name
+    depends_on:
+      - fastapi_server
+    volumes:
+      - ./FlaskApp-interface/static/uploads:/app/static/uploads  # Fixed path
+
+  jupyter:
+    image: quay.io/jupyter/pytorch-notebook:latest
+    container_name: jupyter
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/home/jovyan/work
+      - ./checkpoint-600:/home/jovyan/work/checkpoint-600:ro
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
