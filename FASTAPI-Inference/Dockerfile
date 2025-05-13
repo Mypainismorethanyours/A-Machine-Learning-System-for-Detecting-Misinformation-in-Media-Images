@@ -70,5 +70,8 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Run the FastAPI application
 CMD ["python3", "app.py"]
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> d21b488de45ba198a13675298d926b5d29fbbdc3

@@ -115,6 +115,33 @@ Related to Course Material:
 Using containers and scaling services aligns with Unit 6 (Model Serving) and Unit 3 (DevOps).
 The feedback loop for model evaluation and continuous improvement satisfies the monitoring aspect of the system (Unit 7).
 
+To handle model serving we divided this service into two docker containers: 1 docker container for the flask app user interface and one container for the fast api endpoint that is called by the front end. These two containers are brought up with a docker-compse.yaml file that orchestrates this. The instructions for how to do this is provided below:
+
+
+# Instructions on how to bring up the Flask app interface + FASTAPI docker containers 
+
+on the node instance run : this uses a docker compose file to bring up the two containers for the
+
+docker compose -f ~/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/docker/docker-compose-fastapi.yaml up -d
+
+
+sanity check to see all containers are running properly: 
+
+docker compose ps
+
+check logs for Jupyter container:
+- This will give the token url  (http://127.0.0.1:8888/lab?token=XXXXXXXXXXXXX)
+- To  access the Jupiter container notebook environment in the browser replace 127.0.0.1 with the floating IP address of the reserved instance
+
+
+The system optimizations that we tested on and then applied based on the results to a  trained model targeted reduction of the inference time of our model. However, the overall includes other delays notably system related delays.
+
+Our system level ptimizations were implemneted such that theyb are not harcoded and flexible in that whenever we have a newly trained model we can test different optimizations for that new model, then based on the results we apply the optimizations that result in the best performance( lowest latency if thats a requiremnt that we set for our model). After we have a newly trained the optimization strategies pipeline is ran and the recommended optimizations based on the results of the tests are stored in a json file. When we do model inferencing the current model is loaded as well as the recommended optimization strategies are loaded from the json file and applied to the model for inferencing. 
+
+
+
+
+
 #### Data pipeline
 
 <!-- Make sure to clarify how you will satisfy the Unit 8 requirements,  and which 
