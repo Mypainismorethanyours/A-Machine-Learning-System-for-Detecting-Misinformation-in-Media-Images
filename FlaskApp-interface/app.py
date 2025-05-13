@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-API_URL = os.environ.get('API_URL', 'http://fastapi-inference:8080')
+API_URL = os.environ.get('FASTAPI_SERVER_URL', 'http://fastapi-inference:8080')
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -104,5 +104,3 @@ def health():
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
 
-    # Add a test comment
-echo "# Test comment" >> FASTAPI-Inference/app.py

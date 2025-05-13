@@ -5,7 +5,9 @@
 # Model is loaded with the optimization strategies that are recommended based on the results from the optimization strategies pipeline tests
 #The recommended optimization strategies are loaded from a json file that gets updates with the recommended optimzations for the current model
 #This ensures that the inference service uses the most optimal model / optimization configuration
-
+#This file was modiefied to in introduce closing feedbak loop : introduced minio s3 bucket to be able to store the production data that is 
+# submited by real users. Set up fucntionality so that the data can be used to retrain the model. lastly, set up approaches for evlauting the accuracy of the model
+# using human labeling on a slected number of samples selcted based on established metrics ans human feedback
 
 # Import necessary dependencies
 import torch
@@ -15,40 +17,39 @@ import json
 import logging
 import base64
 from fastapi import FastAPI, HTTPException, File, UploadFile
-from typing import Tuple
-from datetime import datetime
+from typing import Tuple, List, Dict, Any
+from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from PIL import Image
-from prometheus_client import Counter, Histogram, Gauge
+import boto3
+import uuid
+from mimetypes import guess_type
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+import pandas as pd
+
+# Initialize boto3 client for MinIO
+s3_client = boto3.client(
+    's3',
+    endpoint_url=os.environ.get('MINIO_ENDPOINT', 'http://minio:9000'),
+    aws_access_key_id=os.environ.get('MINIO_ACCESS_KEY', 'your-access-key'),
+    aws_secret_access_key=os.environ.get('MINIO_SECRET_KEY', 'your-secret-key'),
+    region_name='us-east-1'  # required for boto3 but not used by MinIO
+)
+
+# Ensure the production-data bucket exists
+try:
+    s3_client.head_bucket(Bucket='production-data')
+    logging.info("Production-data bucket exists")
+except:
+    try:
+        s3_client.create_bucket(Bucket='production-data')
+        logging.info("Created production-data bucket")
+    except Exception as e:
+        logging.error(f"Error creating bucket: {e}")
 
 #=========================== App Startup Process =============================#
 #FastAPI app is initialized -> loadmodel() function call -> recomended optimizations loaded from json file loaded into memory -> model set to eval mode 
-#
-
-# Define metrics for production monitoring
-REQUEST_COUNT = Counter(
-    'model_prediction_requests_total', 
-    'Total prediction requests',
-    ['model_version', 'optimization_type', 'status']
-)
-
-REQUEST_LATENCY = Histogram(
-    'model_prediction_duration_seconds', 
-    'Prediction request latency',
-    ['model_version', 'optimization_type']
-)
-
-MODEL_MEMORY_USAGE = Gauge(
-    'model_memory_usage_mb',
-    'Model memory usage in MB',
-    ['model_version', 'optimization_type']
-)
-
-GPU_UTILIZATION = Gauge(
-    'model_gpu_utilization_percent',
-    'GPU utilization percentage',
-    ['model_version', 'optimization_type']
-)
 
 # Model specific imports
 from transformers import (
@@ -74,6 +75,10 @@ class PredictionResponse(BaseModel):
     label: str = Field(..., description="Extracted label (real, fake, or unknown)")
     reasoning: str = Field(..., description="Extracted reasoning from the model's response")
     processing_time: float = Field(..., description="Total processing time in seconds")
+
+class FeedbackRequest(BaseModel):
+    prediction_id: str = Field(..., description="ID of the prediction to provide feedback for")
+    is_correct: bool = Field(..., description="Whether the prediction was correct")
 
 # Initialize the FastAPI app
 app = FastAPI(
@@ -131,18 +136,18 @@ def load_model():
         }
         
         # Apply Optimization specific configs 
-        if optimization_type == "baseline" or optimization_type == "bf16":
-            model_kwargs["torch_dtype"] == torch.bfloat16
-        elif optimization_type == "fp16":
+        if model_config.optimization_type == "baseline" or model_config.optimization_type == "bf16":
+            model_kwargs["torch_dtype"] = torch.bfloat16
+        elif model_config.optimization_type == "fp16":
             model_kwargs["torch_dtype"] = torch.float16
-        elif optimization_type == "quantization_8bit":
+        elif model_config.optimization_type == "quantization_8bit":
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_8bit=True,
                 bnb_8bit_compute_dtype = torch.float16,
                 bnb_8bit_use_double_quant = True
 
             )
-        elif optimization_type == "quantization_4bit":
+        elif model_config.optimization_type == "quantization_4bit":
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
@@ -150,27 +155,27 @@ def load_model():
                 bnb_4bit_use_double_quant=True
             )
         
-        elif optimization_type == "flash_attention":
+        elif model_config.optimization_type == "flash_attention":
             model_kwargs["torch_dtype"] = torch.bfloat16
             # Flash attention will be enabled after model loading
         
         else:
-            logger.warning(f"Unknown optimization type: {optimization_type}, using bf16")
+            logger.warning(f"Unknown optimization type: {model_config.optimization_type}, using bf16")
             model_kwargs["torch_dtype"] = torch.bfloat16
         
-        # Load base model from HuggingFace 
+        # Load the  base model from HuggingFace lib
         model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             model_id,
             **model_kwargs
         )
 
-        # Enable flash attention if requested
-        if optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
+        # Enable flash attention if it is requested
+        if model_config.optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
             model.config.use_flash_attention_2 = True
             logger.info("Flash Attention 2 enabled")
 
         
-        # Configure LoRA adapter for inference
+        # Configure LoRA adapter for inferencing 
         val_config = LoraConfig(
             task_type=TaskType.CAUSAL_LM,
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
@@ -181,7 +186,7 @@ def load_model():
             bias="none",
         )
         
-        # Load the fine-tuned model
+        # Load the fine-tuned model : based on checkpoint path ( this was never given to me ......)
         if os.path.exists(checkpoint_path):
             logger.info(f"Loading fine-tuned model from {checkpoint_path}")
             peft_model = PeftModel.from_pretrained(model, checkpoint_path, config=val_config)
@@ -203,6 +208,7 @@ def load_model():
             "tokenizer": tokenizer,
             "processor": processor,
             "device": device
+            "optimization_type": model_config.optimization_type
         }
     
     except Exception as e:
@@ -287,6 +293,95 @@ def run_inference(image):
     # Return the result
     return result
 
+def upload_production_image(image: Image.Image, prediction: str, label: str, confidence: float = None) -> str:
+    """
+    Upload production image to MinIO with organized structure and metadata tags
+    
+    Args:
+        image: PIL Image object
+        prediction: Full prediction text from model
+        label: Predicted label (real/fake/unknown)
+        confidence: Optional confidence score if available
+    
+    Returns:
+        prediction_id: Unique identifier for this prediction
+    """
+    try:
+        # Generate unique ID and timestamp
+        prediction_id = str(uuid.uuid4())
+        timestamp = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # Create class directory based on prediction
+        class_dir = f"class_{label.lower()}"
+        
+        # Save image to bytes
+        img_byte_arr = io.BytesIO()
+        image.save(img_byte_arr, format='PNG')
+        img_byte_arr.seek(0)
+        
+        # Upload image to MinIO
+        s3_key = f"{class_dir}/{prediction_id}.png"
+        s3_client.upload_fileobj(
+            img_byte_arr,
+            'production-data',
+            s3_key,
+            ExtraArgs={'ContentType': 'image/png'}
+        )
+        
+        # Create tags for the image
+        tags = {
+            'TagSet': [
+                {'Key': 'predicted_label', 'Value': label},
+                {'Key': 'timestamp', 'Value': timestamp}
+            ]
+        }
+        
+        # Add confidence if available
+        if confidence is not None:
+            tags['TagSet'].append({'Key': 'confidence', 'Value': f"{confidence:.3f}"})
+        
+        # Add tags to the object
+        s3_client.put_object_tagging(
+            Bucket='production-data',
+            Key=s3_key,
+            Tagging=tags
+        )
+        
+        # Save detailed metadata
+        metadata = {
+            "prediction_id": prediction_id,
+            "timestamp": timestamp,
+            "prediction": prediction,
+            "label": label,
+            "confidence": confidence if confidence is not None else None,
+            "s3_key": s3_key
+        }
+        
+        # Save metadata as JSON
+        metadata_bytes = json.dumps(metadata).encode()
+        metadata_buffer = io.BytesIO(metadata_bytes)
+        
+        s3_client.upload_fileobj(
+            metadata_buffer,
+            'production-data',
+            f'metadata/{prediction_id}.json',
+            ExtraArgs={'ContentType': 'application/json'}
+        )
+        
+        logger.info(f"Successfully uploaded production image {prediction_id} to MinIO")
+        return prediction_id
+        
+    except Exception as e:
+        logger.error(f"Error uploading production image to MinIO: {e}")
+        return None
+
+def save_to_minio(image: Image.Image, prediction: str, label: str) -> str:
+    """Save image and prediction data to MinIO using boto3"""
+    return upload_production_image(image, prediction, label)
+
+# Initialize thread pool for asyncchro uploads
+executor = ThreadPoolExecutor(max_workers=2)
+
 @app.post("/predict/file", response_model=PredictionResponse)
 async def predict_image_file(file: UploadFile = File(...)):
     """Direct file upload endpoint"""
@@ -316,6 +411,9 @@ async def predict_image_file(file: UploadFile = File(...)):
         postprocess_start = datetime.now()
         label, reasoning = label_and_reasoning_extraction(prediction_text)
         postprocess_time = (datetime.now() - postprocess_start).total_seconds()
+
+         # Save to the MinIO s3 buck asynchronously
+        executor.submit(upload_production_image, image, prediction_text, label)
         
         # Calculate total processing time
         total_processing_time = (datetime.now() - start_time).total_seconds()
@@ -396,6 +494,7 @@ def get_optimization_info():
         "model_load_time": model_load_time
     }
 
+
 #To check that the model has been loaded and is ready 
 #This is updated to include optimization info 
 @app.get("/health")
@@ -424,6 +523,149 @@ def root():
             "/docs": "GET - API documentation"
         }
     }
+
+def get_low_confidence_samples(confidence_threshold: float = 0.7) -> List[Dict[str, Any]]:
+    """Get samples where model confidence is below threshold"""
+    try:
+        low_conf_samples = []
+        paginator = s3_client.get_paginator('list_objects_v2')
+        
+        for page in paginator.paginate(Bucket='production-data', Prefix='metadata/'):
+            for obj in page.get('Contents', []):
+                response = s3_client.get_object(
+                    Bucket='production-data',
+                    Key=obj['Key']
+                )
+                metadata = json.loads(response['Body'].read().decode())
+                
+                # Check if confidence is below threshold
+                if metadata.get('confidence', 1.0) < confidence_threshold:
+                    low_conf_samples.append(metadata)
+        
+        return low_conf_samples
+    except Exception as e:
+        logger.error(f"Error getting low confidence samples: {e}")
+        return []
+
+@app.get("/low-confidence-samples")
+async def list_low_confidence_samples(confidence_threshold: float = 0.7):
+    """Get list of samples where model confidence is below threshold"""
+    samples = get_low_confidence_samples(confidence_threshold)
+    return {
+        "count": len(samples),
+        "samples": samples
+    }
+
+@app.post("/feedback")
+async def submit_feedback(feedback: FeedbackRequest):
+    """Submit feedback for a prediction"""
+    try:
+        # Get the original prediction metadata
+        metadata_key = f"metadata/{feedback.prediction_id}.json"
+        response = s3_client.get_object(
+            Bucket='production-data',
+            Key=metadata_key
+        )
+        metadata = json.loads(response['Body'].read().decode())
+        
+        # Add feedback information
+        metadata['feedback'] = {
+            'is_correct': feedback.is_correct,
+            'timestamp': datetime.utcnow().isoformat()
+        }
+        
+        # Save updated metadata
+        s3_client.put_object(
+            Bucket='production-data',
+            Key=metadata_key,
+            Body=json.dumps(metadata),
+            ContentType='application/json'
+        )
+        
+        return {"status": "success", "message": "Feedback recorded"}
+    except Exception as e:
+        logger.error(f"Error recording feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def prepare_retraining_data(days_back: int = 30, min_confidence: float = 0.8) -> Dict[str, Any]:
+    """
+    Prepare production data for model retraining
+    """
+    try:
+        # Calculate cutoff date
+        cutoff_date = datetime.utcnow() - timedelta(days=days_back)
+        cutoff_str = cutoff_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        # List all objects in the bucket
+        paginator = s3_client.get_paginator('list_objects_v2')
+        pages = paginator.paginate(Bucket='production-data', Prefix='class_')
+        
+        images = []
+        labels = []
+        
+        for page in pages:
+            for obj in page.get('Contents', []):
+                # Skip metadata files
+                if obj['Key'].startswith('metadata/'):
+                    continue
+                
+                # Get metadata
+                metadata_key = f"metadata/{obj['Key'].split('/')[-1].split('.')[0]}.json"
+                try:
+                    metadata_response = s3_client.get_object(
+                        Bucket='production-data',
+                        Key=metadata_key
+                    )
+                    metadata = json.loads(metadata_response['Body'].read().decode())
+                    
+                    # Skip if before cutoff date
+                    if metadata['timestamp'] < cutoff_str:
+                        continue
+                    
+                    # Get the image data
+                    response = s3_client.get_object(
+                        Bucket='production-data',
+                        Key=obj['Key']
+                    )
+                    image_data = response['Body'].read()
+                    
+                    # Determine label based on feedback
+                    final_label = metadata['label']  # Default to model prediction
+                    
+                    # If we have user feedback indicating the prediction was wrong
+                    if metadata.get('feedback', {}).get('is_correct') is False:
+                        final_label = 'real' if metadata['label'] == 'fake' else 'fake'
+                    
+                    # Add to lists
+                    images.append(image_data)
+                    labels.append(final_label)
+                    
+                except Exception as e:
+                    logger.error(f"Error processing {obj['Key']}: {e}")
+                    continue
+        
+        return {
+            'images': images,
+            'labels': labels
+        }
+    
+    except Exception as e:
+        logger.error(f"Error preparing retraining data: {e}")
+        return None
+
+# Add new endpoint for the production dataset export
+@app.post("/export-retraining-data")
+async def export_retraining_data(
+    days_back: int = 30,
+    min_confidence: float = 0.8,
+    output_dir: str = "./retraining_data"
+):
+    """Export production data for model retraining"""
+    success = export_retraining_dataset(output_dir, days_back, min_confidence)
+    if success:
+        return {"status": "success", "message": f"Dataset exported to {output_dir}"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to export dataset")
 
 Instrumentator().instrument(app).expose(app)
 

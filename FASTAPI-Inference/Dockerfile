@@ -25,20 +25,24 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
+    build-essential \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-
-
-
-# Copy requirements first to leverage Docker cache
+# Copy requirements 
 COPY requirements.txt .
 
-# Install Python dependencies
+# Install necessary Python dependencies
+#add install boto3 for S3 bucket operations with MinIO
 RUN pip3 install --upgrade pip setuptools wheel && \
-    pip3 install --no-cache-dir -r requirements.txt
+    pip3 install --no-cache-dir -r requirements.txt && \
+    pip3 install boto3 prometheus-fastapi-instrumentator 
 
-# Copy application code
+# Create a non-root user
+RUN useradd -m appuser
+
+
+# Copy the application code
 COPY app.py .
 COPY qwen_vl_utils.py .
 
@@ -66,3 +70,8 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 # Run the FastAPI application
 CMD ["python3", "app.py"]
+<<<<<<< HEAD
+
+
+=======
+>>>>>>> d21b488de45ba198a13675298d926b5d29fbbdc3
