@@ -144,5 +144,3 @@ volumes:
   grafana_storage:
   ray_tmp:
   minio_data:
-  # ./data-persist-chi/ammeba/data:
-  #   external: true  # Uses externally created volume
