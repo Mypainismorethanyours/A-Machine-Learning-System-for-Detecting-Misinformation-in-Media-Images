@@ -1,0 +1,94 @@
+name: fastapi_endpoint
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    restart: always
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-your-access-key}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-your-secret-key}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: timeout 5s bash -c ':> /dev/tcp/127.0.0.1/9000' || exit 1
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  minio-init:
+    image: minio/mc
+    container_name: minio_init
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5 &&
+      mc alias set myminio http://minio:9000 ${MINIO_ACCESS_KEY:-your-access-key} ${MINIO_SECRET_KEY:-your-secret-key} &&
+      mc mb -p myminio/production-data || echo 'Bucket already exists'
+      "
+  fastapi_server:
+    build:
+      context: ./FASTAPI-Inference  # the build context.ie the directory of where the docker file and all other files that the Dockerfile might need to COPY or ADD during the build
+      dockerfile: Dockerfile # the docker file that creates the image 
+    container_name: fastapi_inference 
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8000:8080"  # Map internal 8080 to external 8000
+    environment:
+      - CHECKPOINT_PATH=/app/models/checkpoint-600
+      - CUDA_VISIBLE_DEVICES=0
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-your-access-key}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-your-secret-key}
+    volumes:
+      - ./checkpoint-600:/app/models/checkpoint-600:ro
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
+  flask:
+    build:
+      context: ./flask_app  # Your Flask app directory
+      dockerfile: Dockerfile
+    container_name: flaskapp_interface 
+    ports:
+      - "80:5000"  # Map internal 5000 to external 80
+    environment:
+      - FASTAPI_SERVER_URL=http://fastapi_server:8080 # tells the flask app where to can access the fast api inference endpoint 
+    depends_on:
+      - fastapi_server
+    volumes:
+      - ./flask_app/static/uploads:/app/static/uploads
+
+  jupyter:
+    image: quay.io/jupyter/pytorch-notebook:latest  # GPU-enabled Jupyter
+    container_name: jupyter
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/home/jovyan/work  # Mount your entire project
+      - ./checkpoint-600:/home/jovyan/work/checkpoint-600:ro
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+
+    volumes:
+      minio_data:
