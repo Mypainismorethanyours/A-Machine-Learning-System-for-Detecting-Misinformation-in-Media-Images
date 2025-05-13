@@ -31,7 +31,7 @@ MLflow Only
 ```
 git clone --recurse-submodules https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images"
 docker build -t jupyter-mlflow -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/Dockerfile.jupyter-torch-mlflow-cuda .
-docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/docker-compose-mlflow.yaml up -d
+docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/docker-compose-mlflow-ray-cuda.yaml up -d
 # HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4)
 # In place of A.B.C.D, substitute the floating IP address associated with your Kubernetes deployment.
 docker run -it --rm --gpus all -p 8888:8888 --shm-size=16g -v $(pwd):/workspace -v /mnt/object:/mnt/object -e DATA_DIR=/mnt/object -e MLFLOW_TRACKING_URI=http://A.B.C.D:8000 --name jupyter jupyter-mlflow
