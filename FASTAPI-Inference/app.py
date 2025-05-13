@@ -208,7 +208,7 @@ def load_model():
             "tokenizer": tokenizer,
             "processor": processor,
             "device": device,
-            "optimization_type": model_config.optimization_type
+            "optimization_type": model_config.optimization_type, #changed
         }
     
     except Exception as e:
