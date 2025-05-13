@@ -5,7 +5,17 @@ docker build -t jupyter-mlflow -f A-Machine-Learning-System-for-Detecting-Misinf
 docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/docker/docker-compose-mlflow.yaml up -d
 # HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4)
 # In place of A.B.C.D, substitute the floating IP address associated with your Kubernetes deployment.
-docker run -it --rm --gpus all -p 8888:8888 --shm-size=16g -v $(pwd):/workspace -e MLFLOW_TRACKING_URI=http://A.B.C.D:8000 --name jupyter jupyter-mlflow
+docker run -it --rm --gpus all -p 8888:8888 --shm-size=16g -v $(pwd):/workspace -v /mnt/object:/mnt/object -e DATA_DIR=/mnt/object -e MLFLOW_TRACKING_URI=http://A.B.C.D:8000 --name jupyter jupyter-mlflow
+```
+```
+# run in a terminal inside jupyter container
+cd A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune
+python to_Json.py
+pip install -r requirements.txt
+deepspeed --num_gpus=2 train_multi_GPU_LoRA_Full.py
+deepspeed --num_gpus=2 train_multi_GPU_LoRA_Sample.py
+deepspeed --num_gpus=1 train_single_GPU_LoRA_Full.py
+deepspeed --num_gpus=1 train_single_GPU_LoRA_Sample.py
 ```
 MLflow + Ray
 ```
