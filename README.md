@@ -71,28 +71,7 @@ diagram, (3) justification for your strategy, (4) relate back to lecture materia
 
 #### Model training and training platforms
 
-<!-- Make sure to clarify how you will satisfy the Unit 4 and Unit 5 requirements, 
-and which optional "difficulty" points you are attempting. -->
-Strategy:
-
-Use a pretrained multimodal model to detect whether an image is AI-generated or authentic. The model will be fine-tuned on a dataset consisting of both real and AI-generated images, labeled from the data sources mentioned.
-Training Platform: Use a cloud-based GPU instance for training and fine-tuning, utilizing Chameleon infrastructure for scalability.
-Relevant Diagram Parts:
-
-Data collection from social media feeds (APIs).
-Image preprocessing pipeline to normalize and resize images.
-Training and inference using a deep neural network for image classification (e.g., convolutional neural networks or multimodal models like CLIP).
-Justification:
-
-Fine-tuning pretrained models ensures the system benefits from state-of-the-art AI capabilities while focusing on the specific task of detecting AI-generated images.
-The use of cloud-based GPU instances ensures scalability and performance for model training.
-Related to Course Material:
-
-Use of pretrained models (like CLIP) and transfer learning aligns with Unit 4 (Model Training at Scale) and Unit 5 (Model Training Infrastructure and Platform).
-Handling multimodal data (image and text) fits into model training using different modalities.
-Difficulty points:
-Use LLMs to generate prompts first, and then use MLLMs to take both the image and the prompts as inputs to obtain the result.
-Use the strategies to fit training job on a low-end GPU, use distributed training and compare total model training time with one GPU vs. multiple GPUs of the same type.
+Use teacher MLLMs to generate prompts first, and then use student MLLMs to take both the image and the prompts as inputs to obtain the result.
 
 [Link](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/tree/main/Finetune)
 
