@@ -8,12 +8,17 @@ from transformers import (
     DataCollatorForSeq2Seq,
     Qwen2_5_VLForConditionalGeneration,
     AutoProcessor,
-    AutoTokenizer
+    AutoTokenizer,
+    TrainerCallback, 
+    TrainerControl, 
+    TrainerState
 )
 import json
 import mlflow
 import os
 from transformers.integrations import HfDeepSpeedConfig
+import shutil
+import torch.distributed as dist
 
 def process_func(example):
 
@@ -102,10 +107,53 @@ def predict(messages, model):
     
     return output_text[0]
 
+class SaveBestTrainLossCallback(TrainerCallback):
+    def __init__(self, output_dir):
+        self.best_loss = float("inf")
+        self.output_dir = output_dir
+
+    def on_log(self, args, state: TrainerState, control: TrainerControl, logs=None, **kwargs):
+        logs = logs or {}
+        if "loss" in logs:
+            current_loss = logs["loss"]
+            if current_loss < self.best_loss:
+                self.best_loss = current_loss
+                kwargs["model"].save_pretrained(self.output_dir)
+                tokenizer.save_pretrained(self.output_dir)
+                processor.save_pretrained(self.output_dir)
+                print(f"Saved new best model with train loss: {current_loss:.4f}")
 
 if __name__ == "__main__":
 
-    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct Finetuning Single GPU")
+    mlflow.set_experiment("Qwen2.5-VL-3B-Instruct-Fintune-Single-GPU-LoRA-Sample")
+
+    ds_config = {
+        "train_micro_batch_size_per_gpu": 1,
+        "gradient_accumulation_steps": 4,
+        "bf16": {
+            "enabled": True
+        },
+        "zero_optimization": {
+            "stage": 2,  
+            "offload_optimizer": {
+                "device": "cpu",
+                "pin_memory": True
+            },
+            "allgather_partitions": True,
+            "allgather_bucket_size": 2e8,
+            "overlap_comm": True,
+            "reduce_scatter": True,
+            "reduce_bucket_size": 2e8,
+            "contiguous_gradients": True
+        },
+        "gradient_clipping": 1.0,
+        "steps_per_print": 10,
+    }
+    
+    # Initialize DeepSpeed
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "29500"
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
     
     model_id = "Qwen/Qwen2.5-VL-3B-Instruct"
 
@@ -113,16 +161,20 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_id, use_fast=False, trust_remote_code=True)
     processor = AutoProcessor.from_pretrained(model_id)
 
+
+    dschf = HfDeepSpeedConfig(ds_config)
+    
+
     model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
         model_id,
         torch_dtype=torch.bfloat16,
     )
     model.enable_input_require_grads() 
 
-    train_ds = Dataset.from_json("./train/train.json")
+    train_ds = Dataset.from_json("./train.json")
+    train_ds = train_ds.select(range(100))
     train_dataset = train_ds.map(process_func)
 
-    # 配置LoRA
     config = LoraConfig(
         task_type=TaskType.CAUSAL_LM,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
@@ -148,21 +200,25 @@ if __name__ == "__main__":
         gradient_checkpointing=True,
         report_to="mlflow",
         bf16=True,
+        deepspeed=ds_config, 
     )
-
     
     trainer = Trainer(
         model=peft_model,
         args=args,
         train_dataset=train_dataset,
         data_collator=DataCollatorForSeq2Seq(tokenizer=tokenizer, padding=True),
+        callbacks=[SaveBestTrainLossCallback(output_dir="./output/Qwen2.5-VL-3B-Instruct/best_step")]
     )
 
     
     with mlflow.start_run(log_system_metrics=True) as run:
         trainer.train()
-        model_info = mlflow.transformers.log_model(
-            transformers_model=peft_model,
-            artifact_path="Qwen2.5-VL-3B-Instruct-Fintuned",
-            registered_model_name="Qwen2.5-VL-3B-Instruct-Fintuned-Single-GPU-All"
+        save_path = './output/Qwen2.5-VL-3B-Instruct/best_step'
+        directory = os.path.dirname(save_path)
+        shutil.make_archive(os.path.join(directory, "best_step"), 'zip', save_path)
+        mlflow.log_artifact(os.path.join(directory, "best_step.zip"))
+        result = mlflow.register_model(
+            model_uri=f"runs:/{run.info.run_id}/best_step.zip",
+            name="Qwen2.5-VL-3B-Instruct-Fintune-Single-GPU-LoRA-Sample"
         )
