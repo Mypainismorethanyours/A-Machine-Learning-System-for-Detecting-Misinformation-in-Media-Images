@@ -17,7 +17,7 @@ docker build -t jupyter-ray -f A-Machine-Learning-System-for-Detecting-Misinform
 HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4 )
 docker run -it --rm --gpus all \
     -p 8888:8888 \
-    -v $(pwd):/workspace \
+    -v ~/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/workspace_ray:/home/jovyan/work/ \
     -v /mnt/object:/mnt/object \
     -e DATA_DIR=/mnt/object \
     -e RAY_ADDRESS=http://${HOST_IP}:8265/ \
