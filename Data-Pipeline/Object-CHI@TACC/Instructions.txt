@@ -10,7 +10,7 @@ region = CHI@TACC
 mkdir -p ~/data-persist-chi/ammeba
 cd ~/data-persist-chi/ammeba
 
-curl -L https://raw.githubusercontent.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Data-Pipeline/Object-CHI@TACC/ammeba-etl.yaml -o ammeba-etl.yaml
+curl -L https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Data-Pipeline/Object-CHI@TACC/ammeba-etl.yaml -o ammeba-etl.yaml
 
 docker compose -f ammeba-etl.yaml run extract-data
 docker compose -f ammeba-etl.yaml run transform-data
