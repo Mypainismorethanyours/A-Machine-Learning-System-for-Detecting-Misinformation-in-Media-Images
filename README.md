@@ -1,6 +1,5 @@
 
 ## A Machine Learning System for Detecting Misinformation in Media Images
-## A Machine Learning System for Detecting Misinformation in Media Images
 
 <!-- 
 Discuss: Value proposition: Your will propose a machine learning system that can be 
