@@ -1,6 +1,6 @@
 
 ## A Machine Learning System for Detecting Misinformation in Media Images
-# Model Training
+### Model Training
 [Link](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/tree/main/Finetune)
 
 We fine-tune the Qwen2.5-VL-3B-Instruct pre-trained model. The input consists of a fixed question, "Is this image manipulated or synthesized?" along with the user-uploaded image, and the output is a text segment that includes the judgment result and possible reasons.
@@ -12,7 +12,7 @@ We support DeepSpeed for distributed training, MLFlow to track experiments, and 
 [One of Train Code](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/train_single_GPU_LoRA_Sample.py)
 
 
-# Instructions on how to bring up the Flask app interface + FASTAPI docker containers 
+### Instructions on how to bring up the Flask app interface + FASTAPI docker containers 
 
 on the node instance run : this uses a docker compose file to bring up the two containers for the
 
