@@ -136,18 +136,18 @@ def load_model():
         }
         
         # Apply Optimization specific configs 
-        if optimization_type == "baseline" or optimization_type == "bf16":
-            model_kwargs["torch_dtype"] == torch.bfloat16
-        elif optimization_type == "fp16":
+        if model_config.optimization_type == "baseline" or model_config.optimization_type == "bf16":
+            model_kwargs["torch_dtype"] = torch.bfloat16
+        elif model_config.optimization_type == "fp16":
             model_kwargs["torch_dtype"] = torch.float16
-        elif optimization_type == "quantization_8bit":
+        elif model_config.optimization_type == "quantization_8bit":
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_8bit=True,
                 bnb_8bit_compute_dtype = torch.float16,
                 bnb_8bit_use_double_quant = True
 
             )
-        elif optimization_type == "quantization_4bit":
+        elif model_config.optimization_type == "quantization_4bit":
             model_kwargs["quantization_config"] = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
@@ -155,12 +155,12 @@ def load_model():
                 bnb_4bit_use_double_quant=True
             )
         
-        elif optimization_type == "flash_attention":
+        elif model_config.optimization_type == "flash_attention":
             model_kwargs["torch_dtype"] = torch.bfloat16
             # Flash attention will be enabled after model loading
         
         else:
-            logger.warning(f"Unknown optimization type: {optimization_type}, using bf16")
+            logger.warning(f"Unknown optimization type: {model_config.optimization_type}, using bf16")
             model_kwargs["torch_dtype"] = torch.bfloat16
         
         # Load the  base model from HuggingFace lib
@@ -170,7 +170,7 @@ def load_model():
         )
 
         # Enable flash attention if it is requested
-        if optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
+        if model_config.optimization_type == "flash_attention" and hasattr(model.config, 'use_flash_attention_2'):
             model.config.use_flash_attention_2 = True
             logger.info("Flash Attention 2 enabled")
 
@@ -208,6 +208,7 @@ def load_model():
             "tokenizer": tokenizer,
             "processor": processor,
             "device": device
+            "optimization_type": model_config.optimization_type
         }
     
     except Exception as e:
