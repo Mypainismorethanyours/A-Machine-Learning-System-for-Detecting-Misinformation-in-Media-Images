@@ -1,0 +1,151 @@
+name: ammeba-etl
+
+volumes:
+  ammeba:
+
+services:
+  extract-data:
+    container_name: etl_extract_ammeba
+    image: python:3.11
+    user: root
+    volumes:
+      - ammeba:/data
+    working_dir: /data
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+
+        echo "Installing dependencies..."
+        pip install datasets pandas tqdm requests
+
+        echo "Downloading and filtering AMMeBa dataset..."
+        python3 -c '
+import os
+import pandas as pd
+from huggingface_hub import hf_hub_download
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+save_dir = "/data/ammeba"
+os.makedirs(save_dir, exist_ok=True)
+img_dir = os.path.join(save_dir, "images")
+os.makedirs(img_dir, exist_ok=True)
+
+# Step 1: Download required CSV files from Hugging Face Hub
+repo_id = "academic-datasets/AMMeBa"
+data_files = ["image_metadata.csv", "fact_checks.csv", "stage_2.csv"]
+paths = {f: hf_hub_download(repo_id=repo_id, filename=f, repo_type="dataset") for f in data_files}
+
+# Step 2: Load and join stage_2.csv and image_metadata.csv on "image_id"
+df_stage2 = pd.read_csv(paths["stage_2.csv"])
+df_metadata = pd.read_csv(paths["image_metadata.csv"])
+df_full = pd.merge(df_stage2, df_metadata, on="image_id", how="inner")
+
+# Step 3: Filter only rows where content_manipulation is marked true
+# This keeps images that have been digitally altered in their content
+df_full["content_manipulation"] = df_full["content_manipulation"].astype(str).str.lower().map({"true": True, "false": False})
+df_filtered = df_full[df_full["content_manipulation"] == True].reset_index(drop=True)
+
+print(f"Total content-manipulated images: {len(df_filtered)}")
+
+# Step 4: Download filtered images using multithreading
+def download(row):
+    img_url = row["url"]
+    image_id = row["image_id"]
+    filename = f"{image_id}.jpg"
+    filepath = os.path.join(img_dir, filename)
+    try:
+        r = requests.get(img_url, timeout=10)
+        if r.status_code == 200:
+            with open(filepath, "wb") as f:
+                f.write(r.content)
+            return image_id
+    except:
+        return None
+
+rows = df_filtered.to_dict(orient="records")
+with ThreadPoolExecutor(max_workers=20) as executor:
+    results = list(as_completed([executor.submit(download, row) for row in rows]))
+
+successful_ids = [f.result() for f in results if f.result()]
+df_downloaded = df_filtered[df_filtered["image_id"].isin(successful_ids)].copy()
+df_downloaded["filename"] = df_downloaded["image_id"].apply(lambda x: f"{x}.jpg")
+
+# Step 5: Save final filtered CSV
+df_downloaded.to_csv(os.path.join(save_dir, "ammeba-all.csv"), index=False)
+        '
+
+  transform-data:
+    container_name: etl_transform_ammeba
+    image: python:3.11
+    volumes:
+      - ammeba:/data
+    working_dir: /data/ammeba
+    command:
+      - bash
+      - -c
+      - |
+        set -e
+        pip install pandas
+
+        echo "Transforming dataset splits by submission_time..."
+        python3 -c '
+import os
+import pandas as pd
+
+csv_path = "/data/ammeba/ammeba-all.csv"
+df = pd.read_csv(csv_path)
+df["submission_time"] = pd.to_datetime(df["submission_time"], format="%Y-%m-%d %H:%M:%S")
+df = df.sort_values("submission_time").reset_index(drop=True)
+
+n = len(df)
+train = int(n * 10 / 12)
+val = int(n * 1 / 12)
+offline_test = int(n * 1 / 12)
+online_test = int(n * 0.5 / 12)
+production = int(n * 0.01 / 12)
+
+train_df = df.iloc[:train]
+val_df = df.iloc[train:train+val]
+offline_df = df.iloc[train+val:train+val+offline_test]
+online_df = df.iloc[train+val+offline_test:train+val+offline_test+online_test]
+prod_df = df.iloc[train+val+offline_test+online_test:train+val+offline_test+online_test+production]
+
+out_dir = "/data/ammeba-transformed"
+os.makedirs(out_dir, exist_ok=True)
+
+train_df.to_csv(os.path.join(out_dir, "train.csv"), index=False)
+val_df.to_csv(os.path.join(out_dir, "val.csv"), index=False)
+offline_df.to_csv(os.path.join(out_dir, "offline_test.csv"), index=False)
+online_df.to_csv(os.path.join(out_dir, "online_test.csv"), index=False)
+prod_df.to_csv(os.path.join(out_dir, "production.csv"), index=False)
+        '
+
+        echo "Listing contents of /data/ammeba-transformed after transform stage:"
+        ls -l /data/ammeba-transformed
+
+  load-data:
+    container_name: etl_load_ammeba
+    image: rclone/rclone:latest
+    volumes:
+      - ./data:/data
+      - ~/.config/rclone/rclone.conf:/root/.config/rclone/rclone.conf:ro
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        echo "Cleaning up existing contents in object-persist-project-5 ..."
+        rclone delete chi_tacc:object-persist-project-5 --rmdirs || true
+
+        echo "Uploading final dataset to object store..."
+        rclone copy /data/ammeba-transformed chi_tacc:object-persist-project-5 \
+          --progress \
+          --transfers=32 \
+          --checkers=16 \
+          --multi-thread-streams=4 \
+          --fast-list
+
+        echo "Verifying uploaded directory structure:"
+        rclone tree chi_tacc:object-persist-project-5 --max-depth 2
