@@ -7,7 +7,9 @@ We fine-tune the Qwen2.5-VL-3B-Instruct pre-trained model. The input consists of
 
 We support DeepSpeed for distributed training, use MLFlow to track experiments, and Ray cluster to submit training jobs.
 
-[Sample Train Code](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/train_single_GPU_LoRA_Sample.py)
+[Instruction to run](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/docker/README.md)
+
+[One of Train Code](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/train_single_GPU_LoRA_Sample.py)
 
 
 # Instructions on how to bring up the Flask app interface + FASTAPI docker containers 
