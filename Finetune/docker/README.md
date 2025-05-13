@@ -15,6 +15,7 @@ auth = https://chi.tacc.chameleoncloud.org:5000/v3
 region = CHI@TACC
 ```
 ```
+# run on node
 mkdir -p ~/data-persist-chi/ammeba
 cd ~/data-persist-chi/ammeba
 curl -L https://raw.githubusercontent.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/main/Data-Pipeline/Object-CHI@TACC/ammeba-etl.yaml -o ammeba-etl.yaml
@@ -23,8 +24,8 @@ docker compose -f ammeba-etl.yaml run load-data
 sudo mkdir -p /mnt/object
 sudo chown -R cc /mnt/object
 sudo chgrp -R cc /mnt/object
-rclone mount chi_tacc:object-persist-project-5 /mnt/object --read-only --allow-other --daemon
-
+rclone mount chi_tacc:object-persist-project-5 /mnt/object --read-only --daemon
+cd
 ```
 MLflow Only
 ```
