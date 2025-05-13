@@ -94,6 +94,16 @@ Difficulty points:
 Use LLMs to generate prompts first, and then use MLLMs to take both the image and the prompts as inputs to obtain the result.
 Use the strategies to fit training job on a low-end GPU, use distributed training and compare total model training time with one GPU vs. multiple GPUs of the same type.
 
+[Link](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/tree/main/Finetune)
+
+We fine-tune the Qwen2.5-VL-3B-Instruct pre-trained model. The input consists of a fixed question, "Is this image manipulated or synthesized?" along with the user-uploaded image, and the output is a text segment that includes the judgment result and possible reasons.
+
+We support DeepSpeed for distributed training, MLFlow to track experiments, and Ray cluster to submit training jobs.
+
+[Instruction to run](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/docker/README.md)
+
+[One of Train Code](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/train_single_GPU_LoRA_Sample.py)
+
 #### Model serving and monitoring platforms
 
 <!-- Make sure to clarify how you will satisfy the Unit 6 and Unit 7 requirements, 
@@ -116,16 +126,6 @@ Using containers and scaling services aligns with Unit 6 (Model Serving) and Uni
 The feedback loop for model evaluation and continuous improvement satisfies the monitoring aspect of the system (Unit 7).
 
 To handle model serving we divided this service into two docker containers: 1 docker container for the flask app user interface and one container for the fast api endpoint that is called by the front end. These two containers are brought up with a docker-compse.yaml file that orchestrates this. The instructions for how to do this is provided below:
-### Model Training
-[Link](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/tree/main/Finetune)
-
-We fine-tune the Qwen2.5-VL-3B-Instruct pre-trained model. The input consists of a fixed question, "Is this image manipulated or synthesized?" along with the user-uploaded image, and the output is a text segment that includes the judgment result and possible reasons.
-
-We support DeepSpeed for distributed training, MLFlow to track experiments, and Ray cluster to submit training jobs.
-
-[Instruction to run](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/docker/README.md)
-
-[One of Train Code](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/train_single_GPU_LoRA_Sample.py)
 
 
 ### Instructions on how to bring up the Flask app interface + FASTAPI docker containers 
