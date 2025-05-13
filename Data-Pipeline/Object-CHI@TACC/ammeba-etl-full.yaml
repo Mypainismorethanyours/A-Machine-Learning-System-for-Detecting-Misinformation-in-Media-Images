@@ -1,4 +1,4 @@
-name: ammeba-etl
+name: ammeba-etl-full
 
 volumes:
   ammeba:
@@ -33,7 +33,7 @@ os.makedirs(save_dir, exist_ok=True)
 img_dir = os.path.join(save_dir, "images")
 os.makedirs(img_dir, exist_ok=True)
 
-# Step 1: Download required CSV files from Hugging Face Hub
+# Step 1: Download required CSV files
 repo_id = "academic-datasets/AMMeBa"
 data_files = ["image_metadata.csv", "fact_checks.csv", "stage_2.csv"]
 paths = {f: hf_hub_download(repo_id=repo_id, filename=f, repo_type="dataset") for f in data_files}
