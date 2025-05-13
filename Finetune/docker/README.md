@@ -1,3 +1,31 @@
+Data Preper
+```
+# run on node
+mkdir -p ~/.config/rclone
+nano  ~/.config/rclone/rclone.conf
+```
+Paste the following into the config file.
+```
+[chi_tacc]
+type = swift
+user_id = 791358081c320e1a938257e18fd3279d015b04951b0db939c7cd7c241311e4a3
+application_credential_id = 549bb7f422df4748a9a10d380a12a3da
+application_credential_secret = 4WfcSzfWLz6IZnYtawYex14j2daKMYcJvQ7XR5h-dTmQ230SbJFK6NIs7TbN-qTwdvgvw0SbtTfmj2oZ3Gwtfw
+auth = https://chi.tacc.chameleoncloud.org:5000/v3
+region = CHI@TACC
+```
+```
+mkdir -p ~/data-persist-chi/ammeba
+cd ~/data-persist-chi/ammeba
+curl -L https://raw.githubusercontent.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/main/Data-Pipeline/Object-CHI@TACC/ammeba-etl.yaml -o ammeba-etl.yaml
+docker compose -f ammeba-etl.yaml run extract-data
+docker compose -f ammeba-etl.yaml run load-data
+sudo mkdir -p /mnt/object
+sudo chown -R cc /mnt/object
+sudo chgrp -R cc /mnt/object
+rclone mount chi_tacc:object-persist-project-5 /mnt/object --read-only --allow-other --daemon
+
+```
 MLflow Only
 ```
 git clone --recurse-submodules https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images"
