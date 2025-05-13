@@ -26,7 +26,8 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     && apt-get clean \
-    && rm -�/var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
+
 
 
 
