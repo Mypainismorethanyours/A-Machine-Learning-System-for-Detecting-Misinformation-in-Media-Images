@@ -5,7 +5,7 @@
 
 We fine-tune the Qwen2.5-VL-3B-Instruct pre-trained model. The input consists of a fixed question, "Is this image manipulated or synthesized?" along with the user-uploaded image, and the output is a text segment that includes the judgment result and possible reasons.
 
-We support DeepSpeed for distributed training, use MLFlow to track experiments, and Ray cluster to submit training jobs.
+We support DeepSpeed for distributed training, MLFlow to track experiments, and Ray cluster to submit training jobs.
 
 [Instruction to run](https://github.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/blob/main/Finetune/docker/README.md)
 
