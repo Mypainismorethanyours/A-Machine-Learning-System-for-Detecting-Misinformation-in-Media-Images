@@ -16,7 +16,7 @@ docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Medi
 docker build -t jupyter-ray -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/docker/Dockerfile.jupyter-ray .
 HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4 )
 docker run  -d --rm  -p 8888:8888 \
-    -v ~/mltrain-chi/workspace_ray:/home/jovyan/work/ \
+    -v -v $(pwd):/workspace \
     -e RAY_ADDRESS=http://${HOST_IP}:8265/ \
     -e MLFLOW_TRACKING_URI=http://${HOST_IP}:8000/ \
     --name jupyter \
