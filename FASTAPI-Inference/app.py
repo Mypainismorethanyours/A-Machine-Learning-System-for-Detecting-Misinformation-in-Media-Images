@@ -207,7 +207,7 @@ def load_model():
             "model": peft_model,
             "tokenizer": tokenizer,
             "processor": processor,
-            "device": device
+            "device": device,
             "optimization_type": model_config.optimization_type
         }
     
