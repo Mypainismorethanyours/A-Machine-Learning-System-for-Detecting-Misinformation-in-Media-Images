@@ -55,7 +55,7 @@ MLflow + Ray
 # run on node
 export HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4 )
 docker compose -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/docker-compose-mlflow-ray-cuda.yaml up -d
-docker build -t jupyter-ray -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/Dockerfile.jupyter-torch-mlflow-ray-cuda .
+docker build -t jupyter-mlflow-ray -f A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune/docker/Dockerfile.jupyter-torch-mlflow-ray-cuda .
 # HOST_IP=$(curl --silent http://169.254.169.254/latest/meta-data/public-ipv4 )
 # In place of A.B.C.D, substitute the floating IP address associated with your Kubernetes deployment.
 docker run -it --rm --gpus all \
@@ -66,7 +66,7 @@ docker run -it --rm --gpus all \
     -e RAY_ADDRESS=http://A.B.C.D:8082/ \
     -e MLFLOW_TRACKING_URI=http://A.B.C.D:8000/ \
     --name jupyter \
-    jupyter-ray
+    jupyter-mlflow-ray
 ```
 ```
 # run in a terminal inside jupyter container
