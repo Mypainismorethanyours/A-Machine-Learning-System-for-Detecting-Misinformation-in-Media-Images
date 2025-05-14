@@ -45,8 +45,8 @@ docker run -it --rm --gpus all -p 8888:8888 --shm-size=16g -v $(pwd):/workspace 
 cd A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/Finetune
 python to_Json.py
 pip install -r requirements.txt
-deepspeed --num_gpus=2 train_multi_GPU_LoRA_Full.py
-deepspeed --num_gpus=2 train_multi_GPU_LoRA_Sample.py
+deepspeed --num_gpus=2 train_multi_GPUs_LoRA_Full.py
+deepspeed --num_gpus=2 train_multi_GPUs_LoRA_Sample.py
 deepspeed --num_gpus=1 train_single_GPU_LoRA_Full.py
 deepspeed --num_gpus=1 train_single_GPU_LoRA_Sample.py
 ```
