@@ -72,5 +72,5 @@ docker run -it --rm --gpus all \
 # run in a terminal inside jupyter container
 cd A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/workspace_ray
 python to_Json.py
-ray job submit --runtime-env runtime.json --entrypoint-num-gpus 1 --entrypoint-num-cpus 8 --verbose  --working-dir .  -- deepspeed --num_gpus=1 train_single_GPU_LoRA_Sample.py
+ray job submit --runtime-env runtime.json --entrypoint-num-gpus 1 --entrypoint-num-cpus 8 --verbose  --working-dir .  -- deepspeed --num_gpus=1 train_single_GPU_LoRA_Sample_Ray.py
 ```
