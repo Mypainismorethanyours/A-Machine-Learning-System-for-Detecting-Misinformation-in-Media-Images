@@ -63,7 +63,7 @@ docker run -it --rm --gpus all \
     -v $(pwd):/workspace \
     -v /mnt/object:/mnt/object \
     -e DATA_DIR=/mnt/object \
-    -e RAY_ADDRESS=http://A.B.C.D:8082/ \
+    -e RAY_ADDRESS=http://A.B.C.D:8265/ \
     -e MLFLOW_TRACKING_URI=http://A.B.C.D:8000/ \
     --name jupyter \
     jupyter-mlflow-ray
