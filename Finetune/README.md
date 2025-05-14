@@ -1,4 +1,4 @@
-Provision one bare-metal node with 2GPUs under CHI@TACC using 1_create_server.ipynb.
+Provision one bare-metal node with 2×GPUs under CHI@TACC using 1_create_server.ipynb.
 
 Data preparation
 ```
