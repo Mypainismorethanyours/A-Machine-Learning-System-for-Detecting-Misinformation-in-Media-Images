@@ -28,7 +28,7 @@ docker compose -f ammeba-etl.yaml run load-data
 sudo mkdir -p /mnt/object
 sudo chown -R cc /mnt/object
 sudo chgrp -R cc /mnt/object
-rclone mount chi_tacc:object-persist-netID /mnt/object --read-only --allow-other --daemon
+rclone mount chi_tacc:object-persist-project-5 /mnt/object --read-only --allow-other --daemon
 cd
 ```
 MLflow Only
