@@ -3,6 +3,8 @@ To run the training part, we need to reserve 2 NVIDIA GPUs and work through the 
 Data preparation
 ```
 # run on node
+curl https://rclone.org/install.sh | sudo bash
+sudo sed -i '/^#user_allow_other/s/^#//' /etc/fuse.conf
 mkdir -p ~/.config/rclone
 nano  ~/.config/rclone/rclone.conf
 ```
@@ -20,13 +22,13 @@ region = CHI@TACC
 # run on node
 mkdir -p ~/data-persist-chi/ammeba
 cd ~/data-persist-chi/ammeba
-curl -L https://raw.githubusercontent.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/main/Data-Pipeline/Object-CHI@TACC/ammeba-etl.yaml -o ammeba-etl.yaml
+curl -L https://raw.githubusercontent.com/Mypainismorethanyours/A-Machine-Learning-System-for-Detecting-Misinformation-in-Media-Images/main/Data-Pipeline/Object-CHI@TACC/Retrieve-Dataset-old/ammeba-etl.yaml -o ammeba-etl.yaml
 docker compose -f ammeba-etl.yaml run extract-data
 docker compose -f ammeba-etl.yaml run load-data
 sudo mkdir -p /mnt/object
 sudo chown -R cc /mnt/object
 sudo chgrp -R cc /mnt/object
-rclone mount chi_tacc:object-persist-project-5 /mnt/object --read-only --daemon
+rclone mount chi_tacc:object-persist-netID /mnt/object --read-only --allow-other --daemon
 cd
 ```
 MLflow Only
