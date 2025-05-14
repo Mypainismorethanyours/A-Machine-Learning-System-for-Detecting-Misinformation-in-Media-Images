@@ -8,8 +8,8 @@ sudo sed -i '/^#user_allow_other/s/^#//' /etc/fuse.conf
 mkdir -p ~/.config/rclone
 nano  ~/.config/rclone/rclone.conf
 ```
-Paste the following into the config file.
 ```
+# Paste the following into the config file.
 [chi_tacc]
 type = swift
 user_id = 791358081c320e1a938257e18fd3279d015b04951b0db939c7cd7c241311e4a3
