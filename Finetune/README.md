@@ -1,4 +1,4 @@
-To run the training part, we need to reserve 2 NVIDIA GPUs and work through the notebook 1_create_server.ipynb inside the Chameleon Jupyter environment.
+Provision one bare-metal node with 2GPUs under CHI@TACC using 1_create_server.ipynb.
 
 Data preparation
 ```
