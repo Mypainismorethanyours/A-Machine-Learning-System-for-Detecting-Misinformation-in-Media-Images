@@ -86,6 +86,6 @@ for i in range(len(train_df)):
 json_output = json.dumps(conversations, ensure_ascii=False, indent=4)
 
 # Output the result to a JSON file
-output_path = "./Ray_Job/train.json"
+output_path = "./train.json"
 with open(output_path, 'w') as f:
     f.write(json_output)
