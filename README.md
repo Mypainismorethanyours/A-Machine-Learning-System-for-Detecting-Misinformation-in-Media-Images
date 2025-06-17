@@ -12,20 +12,6 @@ propose a system for a science problem, for example.)
 -->
 Our project aims to develop a machine learning system that can determine whether an image contains misleading or false information. Currently, many unreliable media outlets frequently publish deceptive or false images online to mislead the public. However, some platforms still lack mechanisms to alert users about such images. Our system is designed to provide these platforms with a tool that can notify users when content may contain misinformation, urging them to exercise caution when evaluating the material. This will help reduce user reports, improve the efficiency of manual reviews, and create a better environment for these platforms.
 
-### Contributors
-
-<!-- Table of contributors and their roles. 
-First row: define responsibilities that are shared by the team. 
-Then, each row after that is: name of contributor, their role, and in the third column, 
-you will link to their contributions. If your project involves multiple repos, you will 
-link to their contributions in all repos here. -->
-
-| Name                            | Responsible for                          | Link to their commits in this repo |
-|---------------------------------|------------------------------------------|------------------------------------|
-| All team members                | Continuous X pipeline                    |                                    |
-| Chengqian Luo                   | Data collection and Data pipeline        |  https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=Ayachisan                                  |
-| Shengyang Li                    | Model training and Inference                           | https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=Mypainismorethanyours                                   |
-| Julio Rodriguez                 | Model serving and Monitoring	           | https://github.com/Mypainismorethanyours/Detecting-AI-Generated-Images-in-Social-Media/commits/main?author=JulioRodriguez289                                   |  
 
 
 
